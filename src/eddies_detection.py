@@ -146,8 +146,8 @@ def get_traj_with_scipy(date, runtime, max_delta_time, particle_grid_step, strea
 
     # Data sizes
     data_time_size, data_depth_size, data_lat_size, data_lon_size = np.shape(data_set['uo'])
-    longitudes = np.array(data_set['longitude'])+1/24
-    latitudes  = np.array(data_set['latitude'])+1/24
+    longitudes = np.array(data_set['longitude'])-1/24
+    latitudes  = np.array(data_set['latitude'])-1/24
 
     # Replace the mask (ie the ground areas) with a null vector field.
     U = np.array(u_1day)
@@ -239,16 +239,26 @@ def find_eddies(stream_line_list):
         http://marine.copernicus.eu/documents/PUM/CMEMS-GLO-PUM-001-024.pdf.
 
     """
-
-    if len(stream_line_list)==0:
+    nb_sl = len(stream_line_list)
+    if nb_sl==0:
         return []
 
-    sl0 = stream_line_list[0]
+    k0 = 0
+    sl = stream_line_list[k0]
+    while abs(sl.winding_angle)<2*np.pi and k0<nb_sl:
+        k0 +=1
+        sl = stream_line_list[k0]
+
+    if nb_sl==k0:
+        return []
+
+    sl0 = stream_line_list[k0]
     pre_eddies_list = [[sl0]]
     pre_eddies_center = [sl0.mean_pos]
     pre_eddies_max_radius = [sl0.get_mean_radius()]
 
-    for k in range(1,len(stream_line_list)):
+
+    for k in range(k0+1,len(stream_line_list)):
         sl = stream_line_list[k]
         if abs(sl.winding_angle)<2*np.pi:
             continue
