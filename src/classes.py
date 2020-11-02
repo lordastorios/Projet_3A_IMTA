@@ -79,6 +79,25 @@ class StreamLine:
                 delta_time=delta_time[not_null_vect]
                 self.angular_velocities=2*angles/(delta_time[1:]+delta_time[:-1])
 
+    def get_mean_radius(self):
+        """  Compute the mean radius of the stream line.
+
+        Compute the mean distance between the stream line mean pos and the list
+        of coordinates. This value does not have any real meaning if the stream
+        line winding is low.
+
+        Returns:
+            mean_radius (float) : The mean radius of the stream line.
+
+        """
+
+        radius = np.array(self.coord_list)
+        radius[:,0] -= self.mean_pos[0]
+        radius[:,1] -= self.mean_pos[1]
+        radius = np.sqrt(np.sum(radius**2,axis=1))
+        mean_radius = np.mean(radius)
+        return mean_radius
+
 
 class Eddy:
     """ Class used to represent a eddy and compute its caracteristics.

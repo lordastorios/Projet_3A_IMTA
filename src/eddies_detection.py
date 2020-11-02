@@ -146,8 +146,8 @@ def get_traj_with_scipy(date, runtime, max_delta_time, particle_grid_step, strea
 
     # Data sizes
     data_time_size, data_depth_size, data_lat_size, data_lon_size = np.shape(data_set['uo'])
-    longitudes = np.array(data_set['longitude'])
-    latitudes  = np.array(data_set['latitude'])
+    longitudes = np.array(data_set['longitude'])+1/24
+    latitudes  = np.array(data_set['latitude'])+1/24
 
     # Replace the mask (ie the ground areas) with a null vector field.
     U = np.array(u_1day)
@@ -246,40 +246,41 @@ def find_eddies(stream_line_list):
     sl0 = stream_line_list[0]
     pre_eddies_list = [[sl0]]
     pre_eddies_center = [sl0.mean_pos]
+    pre_eddies_max_radius = [sl0.get_mean_radius()]
 
     for k in range(1,len(stream_line_list)):
         sl = stream_line_list[k]
         if abs(sl.winding_angle)<2*np.pi:
             continue
 
-        radius = np.array(sl.coord_list)
-        radius[:,0] -= sl.mean_pos[0]
-        radius[:,1] -= sl.mean_pos[1]
-        radius = np.sqrt(np.sum(radius**2,axis=1))
-        mean_radius = np.mean(radius)
+        # Mean radius of the stream line
+        mean_radius = sl.get_mean_radius()
 
+        # Minimum distance between a stream line center and pre eddies centers
         distances = np.array(pre_eddies_center)
         distances[:,0] -= sl.mean_pos[0]
         distances[:,1] -= sl.mean_pos[1]
         distances = np.sqrt(np.sum(distances**2,axis=1))
-        min_dist = np.min(distances)
+        id_min = np.argmin(distances)
+        min_dist = distances[id_min]
 
         # If the stream line center is close enougth from a pre eddy center, it
         # is added to the pre eddy.
-        if mean_radius>min_dist:
-            id_min = np.argmin(distances)
+        if mean_radius>min_dist or pre_eddies_max_radius[id_min]>min_dist:
             pre_eddies_list[id_min].append(sl)
             n = len(pre_eddies_list[id_min])
-
             sl_center=np.array([pre_eddies_list[id_min][k].mean_pos  for k in range(n)])
             sl_nb_pts=np.array([pre_eddies_list[id_min][k].nb_points for k in range(n)])
             sl_wcenter=[sl_center[k]*sl_nb_pts[k] for k in range(n)]
             pre_eddies_center[id_min] = np.sum(sl_wcenter,axis=0)/np.sum(sl_nb_pts)
+            if min_dist>pre_eddies_max_radius[id_min]:
+                pre_eddies_max_radius[id_min] = min_dist
 
         # A new eddy is created otherwise
         else:
             pre_eddies_list.append([sl])
             pre_eddies_center.append(sl.mean_pos)
+            pre_eddies_max_radius.append(sl.get_mean_radius())
 
     # Remove pre eddies with less than 2 stream lines
     eddies_list = []
