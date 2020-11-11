@@ -1,11 +1,11 @@
-import data_assimilation as dass
+import data_assimilation
 import numpy as np
 import random as rnd
 import matplotlib.pyplot as plt
 
 ### create a pseudo-random catalog for testing
 
-V1=dass.Vortex(np.array([2,6.5]),np.array([4,2.3]),33,Wise.CounterClock,32,np.array([0.3,0.3,0.3,0.3,0.3]))
+V1=Vortex(np.array([2,6.5]),np.array([4,2.3]),33,Wise.CounterClock,32,np.array([0.3,0.3,0.3,0.3,0.3]))
 V2=Vortex(np.array([4.5,3]),np.array([2,1.4]),102,Wise.Clock,67,np.array([0.3,0.3,0.3,0.3,0.3]))
 V3=Vortex(np.array([7.6,8]),np.array([3,3]),31,Wise.CounterClock,72,np.array([0.3,0.3,0.3,0.3,0.3]))
 
