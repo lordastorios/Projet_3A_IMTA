@@ -21,7 +21,7 @@ def get_traj_with_parcels(date, runtime, delta_time, particle_grid_step, stream_
     """Compute trajectories of particles in the sea using parcels library.
 
     Compute trajectories of particles in the sea at a given date, in a static 2D
-    field of stream. Trajectories are saved in a .nc file. 
+    field of stream.
 
     Args:
         date (int) : Day in number of days relatively to the data time origin at
@@ -113,7 +113,7 @@ def get_traj_with_scipy(date, runtime, max_delta_time, particle_grid_step, strea
     """Compute trajectories of particles in the sea using scipy library.
 
     Compute trajectories of particles in the sea at a given date, in a static 2D
-    field of stream. Trajectories are saved in a .nc file. 
+    field of stream.
 
     Args:
         date (int) : Day in number of days relatively to the data time origin at
@@ -214,6 +214,109 @@ def get_traj_with_scipy(date, runtime, max_delta_time, particle_grid_step, strea
 
     return stream_line_list
 
+def get_traj_with_numpy(date, runtime, delta_time, particle_grid_step, stream_data_fname, R = EQUATORIAL_EARTH_RADIUS):
+    """Compute trajectories of particles in the sea using only numpy library.
+
+    Compute trajectories of particles in the sea at a given date, in a static 2D
+    field of stream.
+
+    Args:
+        date (int) : Day in number of days relatively to the data time origin at
+            which the stream data should be taken.
+        runtime (int) : Total duration in hours of the field integration.
+            Trajectories length increases with the runtime.
+        delta_time (int) : Maximum time step in hours of the integration.
+            The integration function used can use smaller time step if needed.
+        particle_grid_step (int) : Grid step size for the initial positions of
+            the particles. The unit is the data index step, ie data dx and dy.
+        stream_data_fname (str) : Complete name of the stream data file.
+        R (float) : Radius of the Earth in meter in the data area. The exact
+            value can be used to reduce Earth shape related conversion and
+            computation error. Default is the equatorial radius.
+
+    Returns:
+        stream_line_list (list of classes.StreamLine) : The list of trajectories
+
+    Notes:
+        The input file is expected to contain the daily mean fields of east- and
+        northward ocean current velocity (uo,vo) in a format as described here:
+        http://marine.copernicus.eu/documents/PUM/CMEMS-GLO-PUM-001-024.pdf.
+
+    """
+
+    # Loading data
+    data_set = nc.Dataset(stream_data_fname)
+    u_1day = data_set['uo'][date,0,:]
+    v_1day = data_set['vo'][date,0,:]
+
+    # Data sizes
+    data_time_size, data_depth_size, data_lat_size, data_lon_size = np.shape(data_set['uo'])
+    longitudes = np.array(data_set['longitude'])-1/24
+    latitudes  = np.array(data_set['latitude'])-1/24
+
+    # Replace the mask (ie the ground areas) with a null vector field.
+    U = np.array(u_1day)
+    U[U == -32767] = 0
+    V = np.array(v_1day)
+    V[V == -32767] = 0
+
+    # Conversion of u and v from m.s**-1 to degree.s**-1
+    conversion_coeff = 360/(2*np.pi*R)
+    U *= conversion_coeff
+    V *= conversion_coeff
+    for lat in range(data_lat_size):
+        U[lat,:] *= 1/np.cos(latitudes[lat]/360)
+
+    # Interpolize continuous u,v from the data array
+    u_interpolized=sp_interp.RectBivariateSpline(longitudes,latitudes,U.T)
+    v_interpolized=sp_interp.RectBivariateSpline(longitudes,latitudes,V.T)
+    def stream(pos_vect):
+        # pos = (long,lat)
+        u = u_interpolized.ev(pos_vect[0],pos_vect[1])
+        v = v_interpolized.ev(pos_vect[0],pos_vect[1])
+        return np.array([u,v])
+
+    # List of initial positions of the particles. Particles on the ground are
+    # removed.
+    init_pos = []
+    for lon in range(0,data_lon_size,particle_grid_step):
+        for lat in range(0,data_lat_size,particle_grid_step):
+             if not u_1day[lat,lon] is np.ma.masked:
+                 init_pos.append([longitudes[lon],latitudes[lat]])
+    init_pos = np.array(init_pos)
+    nb_sl = len(init_pos)
+
+
+    # Integration dt by dt, over the 'runtime' duration
+    dt = 3600*delta_time
+    nb_step = int(runtime/delta_time)
+    sl_array = np.zeros((nb_step+1,nb_sl,2))
+    sl_array[0,:,:] = np.array(init_pos)
+
+    def rk_4(pos):
+        if np.isnan(pos[0]):
+            return np.nan*np.zeros(2)
+        if not (latitudes [0]<=pos[1]<=latitudes [-1]):
+            return np.nan*np.zeros(2)
+        if not (longitudes[0]<=pos[0]<=longitudes[-1]):
+            return np.nan*np.zeros(2)
+        k1=dt*stream(pos)
+        k2=dt*stream(pos+k1*0.5)
+        k3=dt*stream(pos+k2*0.5)
+        k4=dt*stream(pos+k3)
+        return pos+1/6*(k1+k4+2*(k2+k3))
+    rk_4_vectorized=np.vectorize(rk_4,signature='(n)->(n)')
+
+
+    for step in range(nb_step):
+        sl_array[step+1,:,:] = rk_4_vectorized(sl_array[step,:,:])
+
+    sl_list = []
+    for k in range(nb_sl):
+        sl_list.append(StreamLine(sl_array[np.isfinite(sl_array[:,k,0]),k,:],dt))
+
+    return sl_list
+
 def find_eddies(stream_line_list):
     """Classify stream lines into eddies.
 
@@ -245,7 +348,7 @@ def find_eddies(stream_line_list):
 
     k0 = 0
     sl = stream_line_list[k0]
-    while abs(sl.winding_angle)<2*np.pi and k0<nb_sl:
+    while abs(sl.winding_angle)<2*np.pi and k0<nb_sl-1:
         k0 +=1
         sl = stream_line_list[k0]
 
