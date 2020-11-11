@@ -11,7 +11,7 @@ V3=Vortex(np.array([7.6,8]),np.array([3,3]),31,Wise.CounterClock,72,np.array([0.
 
 C=[Situation([V3,V1,V2])]
 
-def next_situation(last_situation,bool):
+def next_situation(last_situation,bool): # bool True for observation, False for model
     new_situation=Situation([])
     for j in range(last_situation.NumVer):
         last_vortex=last_situation.getVortex(j)
@@ -67,11 +67,7 @@ obs=[Model]
 o=Model
 t=0
 while t<40:
-    disp=False
-    if t==10:
-        disp=True
-    t+=1
-    successor,weight=Cata.Neighbors(Model,disp)
+    successor,weight=Cata.Neighbors(Model,False)
     Model=Model.S_prediction(successor,weight)
     if Observation.get(t)!=None:
         o=Observation.get(t)
