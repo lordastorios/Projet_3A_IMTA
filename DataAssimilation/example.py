@@ -67,6 +67,7 @@ obs=[Model]
 o=Model
 t=0
 while t<40:
+    t+=1
     successor,weight=Cata.Neighbors(Model,False)
     Model=Model.S_prediction(successor,weight)
     if Observation.get(t)!=None:
