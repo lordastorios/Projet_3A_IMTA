@@ -35,6 +35,7 @@ class StreamLine:
         self.nb_points = len(coord_list)
         self._set_length()
         self.mean_pos = np.mean(coord_list,axis=0)
+        self.delta_time = delta_time
         self._set_winding_angle_and_angular_velocity(delta_time)
 
     def _set_length(self):
@@ -97,6 +98,10 @@ class StreamLine:
         radius = np.sqrt(np.sum(radius**2,axis=1))
         mean_radius = np.mean(radius)
         return mean_radius
+    
+    def get_sub_streamline(self,i,j):
+        sub_streamline = StreamLine(self.coord_list[i:j], self.delta_time)
+        return sub_streamline
 
 
 class Eddy:
