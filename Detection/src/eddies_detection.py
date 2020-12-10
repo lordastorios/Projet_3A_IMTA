@@ -499,13 +499,13 @@ def optimized_streamline(streamline,delta_time):
     i,j = (n//2),(n//2)+1
     sub_streamline = streamline.get_sub_streamline(i,j,delta_time) 
     
-    while abs(sub_streamline.winding_angle)<2*np.pi and j < n-1:
+    while abs(sub_streamline.winding_angle)<3*np.pi and j<n-1:
         j+=1
         sub_streamline = streamline.get_sub_streamline(i,j,delta_time) 
     
     i = j-1
     
-    while abs(sub_streamline.winding_angle)<2*np.pi:
+    while abs(sub_streamline.winding_angle)<2*np.pi and i > 0:
         i-=1
         sub_streamline = streamline.get_sub_streamline(i,j,delta_time) 
     
