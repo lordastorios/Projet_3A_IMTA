@@ -21,7 +21,7 @@ def get_traj_with_parcels(date, runtime, delta_time, particle_grid_step, stream_
     """Compute trajectories of particles in the sea using parcels library.
 
     Compute trajectories of particles in the sea at a given date, in a static 2D
-    field of stream.
+    field of stream using Runge Kutta 4th order algorithm.
 
     Args:
         date (int) : Day in number of days relatively to the data time origin at
@@ -113,7 +113,7 @@ def get_traj_with_scipy(date, runtime, max_delta_time, particle_grid_step, strea
     """Compute trajectories of particles in the sea using scipy library.
 
     Compute trajectories of particles in the sea at a given date, in a static 2D
-    field of stream.
+    field of stream using Runge Kutta 4th order algorithm.
 
     Args:
         date (int) : Day in number of days relatively to the data time origin at
@@ -145,6 +145,8 @@ def get_traj_with_scipy(date, runtime, max_delta_time, particle_grid_step, strea
     v_1day = data_set['vo'][date,0,:]
 
     # Data sizes
+    # Data step size is 1/12 degree. Due to the C-grid format, an offset of
+    # -0.5*1/12 is added to the axis.
     data_time_size, data_depth_size, data_lat_size, data_lon_size = np.shape(data_set['uo'])
     longitudes = np.array(data_set['longitude'])-1/24
     latitudes  = np.array(data_set['latitude'])-1/24
@@ -218,7 +220,7 @@ def get_traj_with_numpy(date, runtime, delta_time, particle_grid_step, stream_da
     """Compute trajectories of particles in the sea using only numpy library.
 
     Compute trajectories of particles in the sea at a given date, in a static 2D
-    field of stream.
+    field of stream using Runge Kutta 4th order algorithm.
 
     Args:
         date (int) : Day in number of days relatively to the data time origin at
@@ -250,6 +252,8 @@ def get_traj_with_numpy(date, runtime, delta_time, particle_grid_step, stream_da
     v_1day = data_set['vo'][date,0,:]
 
     # Data sizes
+    # Data step size is 1/12 degree. Due to the C-grid format, an offset of
+    # -0.5*1/12 is added to the axis.
     data_time_size, data_depth_size, data_lat_size, data_lon_size = np.shape(data_set['uo'])
     longitudes = np.array(data_set['longitude'])-1/24
     latitudes  = np.array(data_set['latitude'])-1/24
