@@ -1,6 +1,22 @@
-import numpy as np
+# -*- coding: utf-8 -*-
 
-import copy
+"""classes.py: This file defines the classes used for eddies detection."""
+
+__author__     = "G. Ghienne, A. Lefebvre, A. Lerosey, L. Menard, A. Perier"
+__date__       = "December 2020"
+__version__    = "1.0"
+__maintainer__ = "Not maintened"
+__email__      = ["guillaume.ghienne@imt-atlantique.net",
+                  "alexandre.lefebvre@imt-atlantique.net",
+                  "antoine.lerosey@imt-atlantique.net",
+                  "luc.menard@imt-atlantique.net",
+                  "alexandre.perier@imt-atlantique.net"]
+
+import numpy as np
+from tools import grad_desc
+
+import matplotlib.pyplot as plt
+
 
 class StreamLine:
     """Class used to represent a stream line and compute its caracteristics.
@@ -13,8 +29,14 @@ class StreamLine:
         coord_list (array_like) : List of coordinates representing the stream
             line.
         delta_time (array_like or float) : Delta time between 2 consecutive
-            points. If dt is a constant delta_time should be a float and an
-            array_like with len = n-2 otherwise, n beeing the number of points.
+            points. It should be a float if the delta time is a constant or an
+            array_like with len = n-2 and n beeing the number of points
+            otherwise (n-2 because it is used for computing the  angular
+            velocity).
+        cut_lines (bool, default = True) : If True, the considered streamline
+            will be the shortest sub streamline so that the winding angle is
+            equal to 2 pi. This parameter has not effect if the winding angle of
+            the complet streamline is lower than 2 pi. 
 
     Attributes:
         coord_list (array_like) : List of coordinates representing the stream
@@ -32,54 +54,109 @@ class StreamLine:
     """
     R = 6378.137e3
 
-    def __init__(self, coord_list, delta_time):
+    def __init__(self, coord_list, delta_time, cut_lines = True):
         self.coord_list = np.array(coord_list,dtype=float)
-        self.nb_points = len(coord_list)
+        self.nb_points  = len(self.coord_list)
+        self.mean_pos   = np.mean(coord_list,axis=0)
         self._set_length()
-        self.mean_pos = np.mean(coord_list,axis=0)
-        self.delta_time = copy.copy(delta_time)
-        self._set_winding_angle_and_angular_velocity(delta_time)
+        self._set_winding_angle_and_angular_velocity(delta_time,cut_lines)
 
     def _set_length(self):
-        """ Compute the total length of the line. """
+        """ Compute the total length of the streamline. """
         if self.nb_points<=1:
             self.length = 0
         else:
             ldiff_degree     = self.coord_list[1:]-self.coord_list[:-1]
-            ldiff_meter      = ldiff_degree
-            ldiff_meter     *= np.pi*self.R/180
-            ldiff_meter[:,0]*= np.sin(self.coord_list[:-1,1]*np.pi/180)
+            ldiff_meter      = ldiff_degree*np.pi*self.R/180
+            ldiff_meter[:,0]*= np.cos(self.mean_pos[1]*np.pi/180)
             self.length      = np.sum(np.sqrt(ldiff_meter[:,0]**2+
                                               ldiff_meter[:,1]**2))
 
-    def _set_winding_angle_and_angular_velocity(self,delta_time):
+    def _set_winding_angle_and_angular_velocity(self,delta_time,cut_lines):
         """ Compute the sum of the oriented angles in the line.
 
-        The angle at a given point X_k is the angle between
-        vect(X_k-1, X_k) and vect(X_k, X_k+1).
+        The angle at a given point X_k is the angle between vect(X_k-1, X_k) and
+        vect(X_k, X_k+1). If the winding angle is higher than 2 pi, the
+        streamline is cut to keep the shortest streamline so that the winding
+        angle is greater or equal to 2 pi.
 
         Args
             delta_time (array_like or float) : Delta time between 2 consecutive
                 points. If dt is a constant delta_time should be a float and an
-                array_like with len = n- otherwise, n beeing the number of points.
+                array_like with len = n-1 otherwise, n beeing the number of
+                points.
+        cut_lines (bool) : If True, the considered streamline will be the
+            shortest sub streamline so that the winding angle is equal to 2 pi.
+            This parameter has not effect if the winding angle of the complet
+            streamline is lower than 2 pi. 
 
         """
         if self.nb_points<=2:
             self.winding_angle = 0
+            self.angular_velocities = 0
         else:
-            vectors = self.coord_list[1:]-self.coord_list[:-1]
-            not_null_vect = (vectors[:,0] != 0) + (vectors[:,1]!= 0)
-            # remove the null vectors
-            vectors = vectors[not_null_vect,:] 
-            cross_product=vectors[:-1,0]*vectors[1:,1]-vectors[:-1,1]*vectors[1:,0]
-            norms = np.sqrt(np.sum(vectors**2,axis=1))
-            angles = np.arcsin(cross_product/(norms[1:]*norms[:-1]))
-            # self.angle_list    = angles
+            coord = self.coord_list[:,0]+1j*self.coord_list[:,1]
+            vectors = coord[1:]-coord[:-1]
+            vectors += vectors.real*(np.cos(self.mean_pos[1]*np.pi/180)-1)
+
+            # Remove the null vectors
+            not_null_vect = vectors!=0
+            vectors = vectors[not_null_vect]
+            norms = abs(vectors)
+
+            if type(delta_time*1.) != float:
+                delta_time=delta_time[not_null_vect]
+
+            self.coord_list = self.coord_list[np.append(not_null_vect,True),:]
+            self.nb_points  = len(self.coord_list)
+
+            # Compute the angles
+            angles = np.angle(vectors[1:]/vectors[:-1])
+
+            # Find the shortest sub streamline with winding angle >= 2 pi (only
+            # if it exist.
+            cumsum_angles = np.cumsum(angles)
+            max_winding   = max(cumsum_angles)-min(cumsum_angles)
+            if cut_lines and max_winding>2*np.pi:
+                cumsum_norms = np.cumsum(norms)
+
+                min_len = self.length
+
+                # xy    : * (* * * *) * *  nb_points
+                # vect  :  - (- - -) - -   nb_points-1
+                # angle :   o (o o) o o    nb_points-2
+                for start_id in range(self.nb_points-2):
+
+                    start_angle = cumsum_angles[start_id]
+                    start_norm  = cumsum_norms [start_id]
+
+                    for end_id in range(start_id,self.nb_points-2):
+                        curr_ang = abs(cumsum_angles[end_id]-start_angle)
+                        if abs(curr_ang) > 2*np.pi:
+                            curr_len = cumsum_norms[end_id]-start_norm
+                            if curr_len < min_len:
+                                min_len = curr_len
+                                min_end_id = end_id
+                                min_start_id = start_id
+
+                # Recompute the first attributs after taking the sub streamline
+                self.coord_list = np.array(self.coord_list[min_start_id:min_end_id+3],
+                    dtype=float)
+                self.nb_points = (min_end_id+2 - min_start_id) + 1
+                self.length = min_len
+                self.mean_pos = np.mean(self.coord_list,axis=0)
+
+                # Recompute the sub angle list and delta_time
+                angles = np.array(angles[min_start_id:min_end_id+1])
+                if type(delta_time*1.) != float:
+                    delta_time = np.array(delta_time[min_start_id:min_end_id+2])
+
+            # Set the winding angle and the angular velocity
             self.winding_angle = np.sum(angles)
+
             if type(delta_time*1.) == float:
                 self.angular_velocities = angles/delta_time
             else:
-                delta_time=delta_time[not_null_vect]
                 self.angular_velocities=2*angles/(delta_time[1:]+delta_time[:-1])
 
     def get_mean_radius(self):
@@ -100,12 +177,7 @@ class StreamLine:
         radius = np.sqrt(np.sum(radius**2,axis=1))
         mean_radius = np.mean(radius)
         return mean_radius
-    
-    def get_sub_streamline(self,i,j,delta_time):
-        sub_streamline = StreamLine(self.coord_list[i:j], delta_time)
-        return sub_streamline
-    
-    
+
 
 class Eddy:
     """ Class used to represent a eddy and compute its caracteristics.
@@ -115,7 +187,7 @@ class Eddy:
             eddy.
 
     Attributes:
-        sl_list (list of StreamLine) : List of stream line representing the
+        sl_list0 (list of StreamLine) : List of stream line representing the
             eddy.
         nb_sl (int) : Number of stream lines in sl_list.
         center (array_like(2)) : Mean of stream lines center weigthed by
@@ -128,10 +200,9 @@ class Eddy:
 
     """
     def __init__(self, sl_list):
-        self.sl_list       = list(sl_list)
-        self.nb_sl         = len(self.sl_list)
+        self.sl_list = list(sl_list)
+        self.nb_sl   = len(self.sl_list)
         self._set_center()
-        self._set_cov_matrix()
         self._set_axis_len_and_dir()
         self._set_angular_velocity()
 
@@ -147,35 +218,56 @@ class Eddy:
         sl_wcenter = [sl_center[k]*sl_nb_pts[k] for k in range(self.nb_sl)]
         self.center= np.sum(sl_wcenter,axis=0)/np.sum(sl_nb_pts)
 
-    def _set_cov_matrix(self):
-        """ Compute the covariance of all the points on all the streamlines.
+    def _set_axis_len_and_dir(self):
+        """ Compute the axis direction and lengths for the ellipse
 
-        The center is the mean of stream lines center weigthed by the stream
-        line length.
+        The eigen vectors are the directions of the axis of the ellipse. The
+        length is computed so that sum{(x,y)}{(x/a)**2+(y/b)**2-1} is minimum.
 
         """
+
+        # Compute the covariance matrixe for finding the axis direction
         nb_coord=np.sum([self.sl_list[k].nb_points for k in range(self.nb_sl)])
         merged_coord_list = np.zeros((nb_coord,2))
         index = 0
         for sl_id in range(self.nb_sl):
             sl = self.sl_list[sl_id]
-            merged_coord_list[index:index+sl.nb_points] = np.array(sl.coord_list)
-        self.cov_matrix = np.cov(merged_coord_list.T)
+            merged_coord_list[index:index+sl.nb_points,:] = np.array(sl.coord_list)
+            index += sl.nb_points
+        merged_coord_list[:,0] -= self.center[0]
+        merged_coord_list[:,1] -= self.center[1]
+        cov_matrix = np.cov(merged_coord_list.T)
+        self.axis_dir = np.linalg.eig(cov_matrix)[1]
 
-    def _set_axis_len_and_dir(self):
-        """  Compute the eigen values and the eigen vectors of the cov matrix.
+        # Rotate and center the points so that the ellipse equation can be
+        # written "(x/a)**2 + (y/b)**2 = 1"
+        angles = np.angle(self.axis_dir[:,0]+1j*self.axis_dir[:,1])
+        angle = angles[0]
+        rotation = np.array([[np.cos(angle),-np.sin(angle)],
+                               [np.sin(angle),np.cos(angle)]])
+        aligned_points = np.dot(rotation,merged_coord_list.T).T
+        
+        # Compute the regression square error for given (a,b) parameters
+        def error(a,b):
+            points_sq = aligned_points**2
+            points_sq[:,0] /= max(1.*a*a,0.0001)
+            points_sq[:,1] /= max(1.*b*b,0.0001)
+            return np.sum((np.sqrt(np.sum(points_sq,axis=1))-1)**2)
 
-        The eigen values are the axis lengths and the eigen vectors are the
-        directions of the axis
+        # Gradian of the square error
+        def grad_error(a,b):
+            points_sq = aligned_points**2
+            x2 = np.array(points_sq[:,0])
+            y2 = np.array(points_sq[:,1])
+            sq_coeff = np.sqrt(x2/(a*a)+y2/(b*b))
+            common_coeff = -2*(1-1/sq_coeff)
+            grad_a = np.sum(common_coeff*x2)/(a**3)
+            grad_b = np.sum(common_coeff*y2)/(b**3)
+            return grad_a,grad_b
 
-        """
-        eig_val,eig_vec = np.linalg.eig(self.cov_matrix)
-        if eig_val[0]<eig_val[1]:
-            self.axis_len = np.array([eig_val[1],eig_val[0]])
-            self.axis_dir = np.array([eig_vec[1],eig_vec[0]])
-        else:
-            self.axis_len = eig_val
-            self.axis_dir = eig_vec
+        # Gradient decente
+        a,b = grad_desc(error,grad_error)
+        self.axis_len = np.array([a,b])
 
     def _set_angular_velocity(self):
         """  Compute the angular velocity of the eddy.

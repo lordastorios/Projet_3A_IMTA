@@ -1,3 +1,19 @@
+# -*- coding: utf-8 -*-
+
+"""classes.py: This file defines the functions used for streamlines
+computation, processing and clustering and eddies detection."""
+
+__author__     = "G. Ghienne, A. Lefebvre, A. Lerosey, L. Menard, A. Perier"
+__date__       = "December 2020"
+__version__    = "1.0"
+__maintainer__ = "Not maintened"
+__email__      = ["guillaume.ghienne@imt-atlantique.net",
+                  "alexandre.lefebvre@imt-atlantique.net",
+                  "antoine.lerosey@imt-atlantique.net",
+                  "luc.menard@imt-atlantique.net",
+                  "alexandre.perier@imt-atlantique.net"]
+
+
 from parcels import FieldSet, ParticleSet, ScipyParticle, ErrorCode
 from parcels import AdvectionAnalytical, AdvectionRK4
 from datetime import timedelta as delta
@@ -14,7 +30,7 @@ import scipy.interpolate as sp_interp
 import os
 
 EQUATORIAL_EARTH_RADIUS = 6378.137e3
-MIN_STREAM_LINE_IN_EDDIES = 2
+MIN_STREAM_LINE_IN_EDDIES = 3
 
 
 def get_traj_with_parcels(date, runtime, delta_time, particle_grid_step, stream_data_fname):
@@ -186,6 +202,7 @@ def get_traj_with_scipy(date, runtime, max_delta_time, particle_grid_step, strea
     # Integrate each positions
     stream_line_list = []
     progression = 0
+    print("Integration: ",end="",sep="")
     for sl_id in range(nb_stream_line):
         if int(sl_id/nb_stream_line*100)-progression >=5:
             progression += 5
@@ -312,12 +329,19 @@ def get_traj_with_numpy(date, runtime, delta_time, particle_grid_step, stream_da
     rk_4_vectorized=np.vectorize(rk_4,signature='(n)->(n)')
 
 
+    progression = 0
+    print("Integration: ",end="",sep="")
     for step in range(nb_step):
+        if int(step/nb_step*100)-progression >=5:
+            progression += 5
+            print(progression, "% ",end="",sep="")
         sl_array[step+1,:,:] = rk_4_vectorized(sl_array[step,:,:])
+    print()
 
     sl_list = []
     for k in range(nb_sl):
-        sl_list.append(StreamLine(sl_array[np.isfinite(sl_array[:,k,0]),k,:],dt))
+        sl_list.append(StreamLine(sl_array[np.isfinite(sl_array[:,k,0]),k,:],
+                                  dt))#,cut_lines=False))
 
     return sl_list
 
@@ -346,16 +370,16 @@ def find_eddies(stream_line_list):
         http://marine.copernicus.eu/documents/PUM/CMEMS-GLO-PUM-001-024.pdf.
 
     """
+
+    # Find a first streamline with a winding angle higher than 2 pi for init
     nb_sl = len(stream_line_list)
     if nb_sl==0:
         return []
-
     k0 = 0
     sl = stream_line_list[k0]
     while abs(sl.winding_angle)<2*np.pi and k0<nb_sl-1:
         k0 +=1
         sl = stream_line_list[k0]
-
     if nb_sl==k0:
         return []
 
@@ -364,7 +388,7 @@ def find_eddies(stream_line_list):
     pre_eddies_center = [sl0.mean_pos]
     pre_eddies_max_radius = [sl0.get_mean_radius()]
 
-
+    # Put each streamline into an eddy if the winding angle is greater than 2 pi
     for k in range(k0+1,len(stream_line_list)):
         sl = stream_line_list[k]
         if abs(sl.winding_angle)<2*np.pi:
@@ -399,118 +423,10 @@ def find_eddies(stream_line_list):
             pre_eddies_center.append(sl.mean_pos)
             pre_eddies_max_radius.append(sl.get_mean_radius())
 
-    # Remove pre eddies with less than 2 stream lines
+    # Remove pre eddies without enougth stream lines
     eddies_list = []
     for pre_eddy in pre_eddies_list:
         if len(pre_eddy) >= MIN_STREAM_LINE_IN_EDDIES:
             eddies_list.append(Eddy(pre_eddy))
 
     return eddies_list
-
-def find_eddies2(stream_line_list, delta_time):
-    """Classify stream lines into eddies. Take only in account the portion with a winding
-    angle of 2 pi of each streamline. 
-
-    All the stream lines with a winding angle lower than 2 pi are discarded. If
-    the distance between the mean pos of the stream line and an eddy center is
-    lower than the mean distance between the mean pos of the stream line and the
-    points in the stream line (ie lower that the mean radius, if the stream line
-    is considered to be an ellipse), this stream line is added to the eddy. The
-    new center of the eddy is computed. Otherwise the stream line is added to a
-    new eddy. When all the stream lines have been assigned to an eddy, the
-    eddies containing less than 2 (TBD ?) stream lines are discarded.
-
-    Args:
-        stream_line_list (list of classes.StreamLine) : The list of trajectories
-            to be classified into eddies.
-
-    Returns:
-        eddies_list (list of classes.Eddy) : The list of eddies
-
-    Notes:
-        The input file is expected to contain the daily mean fields of east- and
-        northward ocean current velocity (uo,vo) in a format as described here:
-        http://marine.copernicus.eu/documents/PUM/CMEMS-GLO-PUM-001-024.pdf.
-
-    """
-    nb_sl = len(stream_line_list)
-    if nb_sl==0:
-        return []
-
-    k0 = 0
-    sl = stream_line_list[k0]
-    while abs(sl.winding_angle)<2*np.pi and k0<nb_sl-1:
-        k0 +=1
-        sl = stream_line_list[k0]
-    
-    
-    if nb_sl==k0:
-        return []
-
-    sl0 = stream_line_list[k0]
-    slo0 = optimized_streamline(sl0,delta_time)
-    pre_eddies_list = [[slo0]]
-    pre_eddies_center = [slo0.mean_pos]
-    pre_eddies_max_radius = [slo0.get_mean_radius()]
-
-
-    for k in range(k0+1,len(stream_line_list)):
-        sl = stream_line_list[k]
-        if abs(sl.winding_angle)<2*np.pi:
-            continue
-        
-        slo = optimized_streamline(sl,delta_time)
-        
-        # Mean radius of the stream line
-        mean_radius = slo.get_mean_radius()
-
-        # Minimum distance between a stream line center and pre eddies centers
-        distances = np.array(pre_eddies_center)
-        distances[:,0] -= slo.mean_pos[0]
-        distances[:,1] -= slo.mean_pos[1]
-        distances = np.sqrt(np.sum(distances**2,axis=1))
-        id_min = np.argmin(distances)
-        min_dist = distances[id_min]
-
-        # If the stream line center is close enougth from a pre eddy center, it
-        # is added to the pre eddy.
-        if mean_radius>min_dist or pre_eddies_max_radius[id_min]>min_dist:
-            pre_eddies_list[id_min].append(slo)
-            n = len(pre_eddies_list[id_min])
-            sl_center=np.array([pre_eddies_list[id_min][k].mean_pos  for k in range(n)])
-            sl_nb_pts=np.array([pre_eddies_list[id_min][k].nb_points for k in range(n)])
-            sl_wcenter=[sl_center[k]*sl_nb_pts[k] for k in range(n)]
-            pre_eddies_center[id_min] = np.sum(sl_wcenter,axis=0)/np.sum(sl_nb_pts)
-            if min_dist>pre_eddies_max_radius[id_min]:
-                pre_eddies_max_radius[id_min] = min_dist
-
-        # A new eddy is created otherwise
-        else:
-            pre_eddies_list.append([slo])
-            pre_eddies_center.append(slo.mean_pos)
-            pre_eddies_max_radius.append(slo.get_mean_radius())
-
-    # Remove pre eddies with less than 2 stream lines
-    eddies_list = []
-    for pre_eddy in pre_eddies_list:
-        if len(pre_eddy) >= MIN_STREAM_LINE_IN_EDDIES:
-            eddies_list.append(Eddy(pre_eddy))
-
-    return eddies_list
-
-def optimized_streamline(streamline,delta_time):
-    n = streamline.nb_points
-    i,j = (n//2),(n//2)+1
-    sub_streamline = streamline.get_sub_streamline(i,j,delta_time) 
-    
-    while abs(sub_streamline.winding_angle)<2*np.pi and j < n-1:
-        j+=1
-        sub_streamline = streamline.get_sub_streamline(i,j,delta_time) 
-    
-    i = j-1
-    
-    while abs(sub_streamline.winding_angle)<2*np.pi:
-        i-=1
-        sub_streamline = streamline.get_sub_streamline(i,j,delta_time) 
-    
-    return sub_streamline
