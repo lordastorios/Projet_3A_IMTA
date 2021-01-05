@@ -14,26 +14,21 @@ __email__      = ["guillaume.ghienne@imt-atlantique.net",
                   "alexandre.perier@imt-atlantique.net"]
 
 
+import netCDF4 as nc
+import numpy as np
+import os
+import scipy.integrate   as sp_integ
+import scipy.interpolate as sp_interp
+
 from parcels import FieldSet, ParticleSet, ScipyParticle, ErrorCode
 from parcels import AdvectionAnalytical, AdvectionRK4
 from datetime import timedelta as delta
 
-import netCDF4 as nc
-import numpy as np
-
-from plot_tools import StreamPlot
 from classes import StreamLine, Eddy
-
-import scipy.integrate   as sp_integ
-import scipy.interpolate as sp_interp
-
-import os
-
-EQUATORIAL_EARTH_RADIUS = 6378.137e3
-MIN_STREAM_LINE_IN_EDDIES = 3
+from constants import EQUATORIAL_EARTH_RADIUS,MIN_STREAMLINE_IN_EDDIES
 
 
-def get_traj_with_parcels(date, runtime, delta_time, particle_grid_step, stream_data_fname):
+def get_traj_with_parcels(date,runtime,delta_time,particle_grid_step,stream_data_fname):
     """Compute trajectories of particles in the sea using parcels library.
 
     Compute trajectories of particles in the sea at a given date, in a static 2D
@@ -50,7 +45,7 @@ def get_traj_with_parcels(date, runtime, delta_time, particle_grid_step, stream_
         stream_data_fname (str) : Complete name of the stream data file.
 
     Returns:
-        stream_line_list (list of classes.StreamLine) : The list of trajectories
+        stream_line_list (list of classes.StreamLine) : The list of trajectories.
 
     Notes:
         The input file is expected to contain the daily mean fields of east- and
@@ -66,7 +61,7 @@ def get_traj_with_parcels(date, runtime, delta_time, particle_grid_step, stream_
     v_1day = data_set['vo'][date,0,:]
 
     # Data sizes
-    data_time_size, data_depth_size, data_lat_size, data_lon_size = np.shape(data_set['uo'])
+    data_time_size,data_depth_size,data_lat_size,data_lon_size=np.shape(data_set['uo'])
     longitudes = np.array(data_set['longitude'])
     latitudes  = np.array(data_set['latitude'])
 
@@ -125,7 +120,7 @@ def get_traj_with_parcels(date, runtime, delta_time, particle_grid_step, stream_
 
     return stream_line_list
 
-def get_traj_with_scipy(date, runtime, max_delta_time, particle_grid_step, stream_data_fname, R = EQUATORIAL_EARTH_RADIUS):
+def get_traj_with_scipy(date,runtime,max_delta_time,particle_grid_step,stream_data_fname,R=EQUATORIAL_EARTH_RADIUS):
     """Compute trajectories of particles in the sea using scipy library.
 
     Compute trajectories of particles in the sea at a given date, in a static 2D
@@ -146,7 +141,7 @@ def get_traj_with_scipy(date, runtime, max_delta_time, particle_grid_step, strea
             computation error. Default is the equatorial radius.
 
     Returns:
-        stream_line_list (list of classes.StreamLine) : The list of trajectories
+        stream_line_list (list of classes.StreamLine) : The list of trajectories.
 
     Notes:
         The input file is expected to contain the daily mean fields of east- and
@@ -163,7 +158,7 @@ def get_traj_with_scipy(date, runtime, max_delta_time, particle_grid_step, strea
     # Data sizes
     # Data step size is 1/12 degree. Due to the C-grid format, an offset of
     # -0.5*1/12 is added to the axis.
-    data_time_size, data_depth_size, data_lat_size, data_lon_size = np.shape(data_set['uo'])
+    data_time_size,data_depth_size,data_lat_size,data_lon_size=np.shape(data_set['uo'])
     longitudes = np.array(data_set['longitude'])-1/24
     latitudes  = np.array(data_set['latitude'])-1/24
 
@@ -233,7 +228,7 @@ def get_traj_with_scipy(date, runtime, max_delta_time, particle_grid_step, strea
 
     return stream_line_list
 
-def get_traj_with_numpy(date, runtime, delta_time, particle_grid_step, stream_data_fname, R = EQUATORIAL_EARTH_RADIUS):
+def get_traj_with_numpy(date,runtime,delta_time,particle_grid_step,stream_data_fname,R=EQUATORIAL_EARTH_RADIUS):
     """Compute trajectories of particles in the sea using only numpy library.
 
     Compute trajectories of particles in the sea at a given date, in a static 2D
@@ -254,7 +249,7 @@ def get_traj_with_numpy(date, runtime, delta_time, particle_grid_step, stream_da
             computation error. Default is the equatorial radius.
 
     Returns:
-        stream_line_list (list of classes.StreamLine) : The list of trajectories
+        stream_line_list (list of classes.StreamLine) : The list of trajectories.
 
     Notes:
         The input file is expected to contain the daily mean fields of east- and
@@ -271,7 +266,7 @@ def get_traj_with_numpy(date, runtime, delta_time, particle_grid_step, stream_da
     # Data sizes
     # Data step size is 1/12 degree. Due to the C-grid format, an offset of
     # -0.5*1/12 is added to the axis.
-    data_time_size, data_depth_size, data_lat_size, data_lon_size = np.shape(data_set['uo'])
+    data_time_size,data_depth_size,data_lat_size,data_lon_size=np.shape(data_set['uo'])
     longitudes = np.array(data_set['longitude'])-1/24
     latitudes  = np.array(data_set['latitude'])-1/24
 
@@ -362,7 +357,7 @@ def find_eddies(stream_line_list):
             to be classified into eddies.
 
     Returns:
-        eddies_list (list of classes.Eddy) : The list of eddies
+        eddies_list (list of classes.Eddy) : The list of eddies.
 
     Notes:
         The input file is expected to contain the daily mean fields of east- and
@@ -426,7 +421,7 @@ def find_eddies(stream_line_list):
     # Remove pre eddies without enougth stream lines
     eddies_list = []
     for pre_eddy in pre_eddies_list:
-        if len(pre_eddy) >= MIN_STREAM_LINE_IN_EDDIES:
+        if len(pre_eddy) >= MIN_STREAMLINE_IN_EDDIES:
             eddies_list.append(Eddy(pre_eddy))
 
     return eddies_list

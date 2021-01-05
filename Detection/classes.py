@@ -15,8 +15,6 @@ __email__      = ["guillaume.ghienne@imt-atlantique.net",
 import numpy as np
 from tools import grad_desc
 
-import matplotlib.pyplot as plt
-
 
 class StreamLine:
     """Class used to represent a stream line and compute its caracteristics.
@@ -43,9 +41,8 @@ class StreamLine:
             line. 
         nb_points (int) : Number of points in coord_list.
         length (float) : Total length of the line.
-        mean_pos (ndarray (2,)) : Average of the coordinates. If the stream
-            line is in a eddy, this is an approximation of the eddy center
-            coordinates. 
+        mean_pos (ndarray(2,)) : Average of the coordinates. If the stream line
+            is in a eddy, it represents an approximation of the eddy center. 
         winding_angle (float) : Sum of the oriented angles formed by 3
             consecutive points in the line. Unit is the radian
         angular_velocities (np.array) : List of the oriented angular velocities
@@ -91,24 +88,26 @@ class StreamLine:
             streamline is lower than 2 pi. 
 
         """
+        
+        coord = self.coord_list[:,0]+1j*self.coord_list[:,1]
+        vectors = coord[1:]-coord[:-1]
+        vectors += vectors.real*(np.cos(self.mean_pos[1]*np.pi/180)-1)
+
+        # Remove the null vectors
+        not_null_vect = vectors!=0
+        vectors = vectors[not_null_vect]
+        norms = abs(vectors)
+
+        if type(delta_time*1.) != float:
+            delta_time=delta_time[not_null_vect]
+
+        self.coord_list = self.coord_list[np.append(not_null_vect,True),:]
+        self.nb_points  = len(self.coord_list)
+
         if self.nb_points<=2:
             self.winding_angle = 0
             self.angular_velocities = 0
         else:
-            coord = self.coord_list[:,0]+1j*self.coord_list[:,1]
-            vectors = coord[1:]-coord[:-1]
-            vectors += vectors.real*(np.cos(self.mean_pos[1]*np.pi/180)-1)
-
-            # Remove the null vectors
-            not_null_vect = vectors!=0
-            vectors = vectors[not_null_vect]
-            norms = abs(vectors)
-
-            if type(delta_time*1.) != float:
-                delta_time=delta_time[not_null_vect]
-
-            self.coord_list = self.coord_list[np.append(not_null_vect,True),:]
-            self.nb_points  = len(self.coord_list)
 
             # Compute the angles
             angles = np.angle(vectors[1:]/vectors[:-1])
@@ -254,7 +253,7 @@ class Eddy:
             points_sq[:,1] /= max(1.*b*b,0.0001)
             return np.sum((np.sqrt(np.sum(points_sq,axis=1))-1)**2)
 
-        # Gradian of the square error
+        # Gradient of the square error
         def grad_error(a,b):
             points_sq = aligned_points**2
             x2 = np.array(points_sq[:,0])

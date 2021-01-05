@@ -115,18 +115,36 @@ class StreamPlot:
 
         # Plot ellipses
         # The angle of the ellipse is computed with 'vect_x - vect_y*1j' because of y-axis inversion for plotting ellispses.
+        resize_coeff = 3
         axes_len = np.array([eddies[k].axis_len for k in range(n)])
         axes_dir = np.array([eddies[k].axis_dir for k in range(n)])
         angles =   np.array([np.angle(axes_dir[k,0,0]-axes_dir[k,0,1]*1j) for k
                              in range(n)])/(2*np.pi)*360
         for k in range(n):
-            ellipse = Ellipse(centers[k,:],axes_len[k,0]*3,axes_len[k,1]*3,
+            ellipse = Ellipse(centers[k,:],
+                              axes_len[k,0]*resize_coeff,
+                              axes_len[k,1]*resize_coeff,
                               angle=angles[k],color='black',alpha=1,fill=False,
                               linewidth=2)
             self.ax.add_patch(ellipse)
 
-    def plot(self,X,Y,line_style='+'):
-        self.ax.plot(X,Y,line_style,transform=cartopy.crs.Geodetic())
+            # Plot axis
+            self.ax.arrow(centers[k,0],centers[k,1],
+                axes_dir[k,0,0]*axes_len[k,0]*1.5,
+                -axes_dir[k,0,1]*axes_len[k,0]*1.5,
+                head_width=0.1,head_length=0.1,fc="black",ec="black")
+
+            self.ax.arrow(centers[k,0],centers[k,1],
+                axes_dir[k,1,0]*axes_len[k,1]*1.5,
+                -axes_dir[k,1,1]*axes_len[k,1]*1.5,
+                head_width=0.1,head_length=0.1,fc="black",ec="black")
+
+    def plot(self,X,Y,marker='+',color=None):
+        if color != None:
+            self.ax.plot(X,Y,marker=marker,color=color,
+                         transform=cartopy.crs.Geodetic())
+        else:
+            self.ax.plot(X,Y,marker=marker,transform=cartopy.crs.Geodetic())
 
     def show(self):
         plt.show()
