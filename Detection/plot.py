@@ -20,6 +20,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 
 from matplotlib.patches import Ellipse
+from matplotlib.colors import Normalize
 
 from classes import StreamLine, Eddy
 
@@ -139,7 +140,64 @@ class StreamPlot:
                 -axes_dir[k,1,1]*axes_len[k,1]*1.5,
                 head_width=0.1,head_length=0.1,fc="black",ec="black")
 
+    def plot_catalogue(self,eddies_path):
+        """ Plot the center of the eddies in the catalogue.
+
+        The centers are colored following the date of observation.
+
+        Args:
+            eddies_path (dict(int : dict(int : classes.Eddy))) : The path of eddies.
+                A unique id is assigned to each eddy so that 2 object 'classes.Eddy'
+                share the same id if and only if they represent the same eddy at
+                different dates. The first key is a date, the second key is the eddy
+                identifier.
+
+        """
+
+        list_dates = list(eddies_path.keys())
+        date_start = min(list_dates)
+        date_end = max(list_dates)
+
+        cmap = plt.cm.brg(np.linspace(0,1,date_end-date_start+1))
+        for date in range(date_start,date_end+1):
+            xy = []
+            for eddy_id in eddies_path[date].keys():
+                xy.append(eddies_path[date][eddy_id].center)
+            xy = np.array(xy)
+            self.ax.plot(xy[:,0],xy[:,1],linestyle='',marker='o',markersize=5,color=cmap[date - date_start],transform=cartopy.crs.Geodetic())
+
+        self.fig.colorbar(plt.cm.ScalarMappable(cmap='brg',norm = Normalize(vmin=date_start,vmax=date_end)))
+
+
+    def plot_eddies_trajectories(self,eddies_path):
+        """ Plot the center of the eddies in the catalogue.
+
+        The centers are colored following the date of observation.
+
+        Args:
+            eddies_path (dict(int : dict(int : classes.Eddy))) : The path of eddies.
+                A unique id is assigned to each eddy so that 2 object 'classes.Eddy'
+                share the same id if and only if they represent the same eddy at
+                different dates. The first key is a date, the second key is the eddy
+                identifier.
+
+        """
+
+        eddies_traj = {}
+        for day in eddies_path.keys():
+            for eddy_id in eddies_path[day].keys():
+                if not eddy_id in eddies_traj:
+                    eddies_traj[eddy_id]=[eddies_path[day][eddy_id].center]
+                else:
+                    eddies_traj[eddy_id].append(eddies_path[day][eddy_id].center)
+
+        for eddy_id in eddies_traj.keys():
+            xy = np.array(eddies_traj[eddy_id])
+            self.ax.plot(xy[:,0], xy[:,1], marker='.',markersize=5)
+
+
     def plot(self,X,Y,marker='+',color=None):
+        """ Wrapper of the basic 'plot' function of matplotlib.pyplot """
         if color != None:
             self.ax.plot(X,Y,marker=marker,color=color,
                          transform=cartopy.crs.Geodetic())

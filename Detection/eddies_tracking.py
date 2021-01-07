@@ -17,7 +17,7 @@ __email__      = ["guillaume.ghienne@imt-atlantique.net",
 import numpy as np
 
 
-def eddies_tracker(initial_date, list_days, metric_name='Jaccard',nb_prev_day=3):
+def eddies_tracker(initial_date, list_days, metric_name='Jaccard',nb_prev_day=5,min_detection=5):
     """ Identify which eddies are the same over several days.
 
     Args:
@@ -33,7 +33,9 @@ def eddies_tracker(initial_date, list_days, metric_name='Jaccard',nb_prev_day=3)
             detected for several consecutive days, an eddy can be matched with a
             previous position several days before. The default value has been
             choosen with the assumption that an eddy that last several days will
-            not be not detected for more that one day. 
+            not be not detected for more that one day.
+        min_detection (int, default=5) : Minimum number of observation of an
+            eddy. Eddies with too view observations are discarded 
 
     Returns:
         eddies_path (dict(int : dict(int : classes.Eddy))) : The path of eddies.
@@ -64,17 +66,30 @@ def eddies_tracker(initial_date, list_days, metric_name='Jaccard',nb_prev_day=3)
         current_max_id += 1
         eddies_path[initial_date][current_max_id] = eddy
 
-    # Handle the 2nd day separatly
-    if nb_days == 1:
-        return eddies_path
-    current_max_id += track_one_day(initial_date+1,eddies_path,list_days[1],
-                                    current_max_id,metric,nb_prev_day=1)
+    # Handle the first days separatly (as part of the initialisation)
+    for day in range(1,nb_prev_day):
+        if nb_days == day:
+            return eddies_path
+        current_max_id += track_one_day(initial_date+day,eddies_path,list_days[day],
+                                    current_max_id,metric,nb_prev_day=day)
 
     # Match positions day by day
-    for day in range(2,nb_days):
+    for day in range(nb_prev_day,nb_days):
         current_max_id += track_one_day(initial_date+day,eddies_path,
                                         list_days[day],current_max_id,
                                         metric,nb_prev_day=nb_prev_day)
+
+    # Delete eddies observed too view times
+    nb_observation = np.zeros((current_max_id+1))
+    for day in eddies_path.keys():
+        for eddy_id in eddies_path[day].keys():
+            nb_observation[eddy_id] += 1
+    remove_eddy = nb_observation<min_detection
+    for day in eddies_path.keys():
+        list_keys = list(eddies_path[day].keys())
+        for eddy_id in list_keys:
+            if remove_eddy[eddy_id]:
+                del eddies_path[day][eddy_id]
 
     return eddies_path
 
@@ -127,8 +142,7 @@ def track_one_day(date,current_eddies_path,eddies_in_day,current_max_id,metric,n
         for date_offset in range(0,nb_prev_day):
             best_score = 0
             best_id    = -1
-
-            for key in current_eddies_path[date-1 - date_offset].keys():
+            for key in current_eddies_path[date-1-date_offset].keys():
                 score = metric(eddies_in_day[eddy_id],
                                current_eddies_path[date-1 - date_offset][key])
                 if score > best_score:
