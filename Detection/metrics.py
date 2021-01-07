@@ -18,6 +18,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from tools import pts_is_in_ellipse
+from constants import JACCARD_RESOLUTION
 
 
 def eddies_jaccard_index(e1,e2):
@@ -52,7 +53,7 @@ def eddies_jaccard_index(e1,e2):
 
     # Generate a list of points for computing the intersecton surface with
     # finit elements.
-    nb_points = 100
+    nb_points = JACCARD_RESOLUTION
     x = np.linspace(e1.center[0]-max_r1,e1.center[0]+max_r1,nb_points)
     y = np.linspace(e1.center[1]-max_r1,e1.center[1]+max_r1,nb_points)
     xx,yy = np.meshgrid(x,y)

@@ -18,3 +18,4 @@ EDDY_MIN_AXIS_LEN =1e-2        # Axis length for ellipses representing eddies.
 EDDY_AXIS_PRECISION = 1e-4     # Stop criterion for gradient descente.
 EQUATORIAL_EARTH_RADIUS = 6378.137e3
 MIN_STREAMLINE_IN_EDDIES = 3   # Number for streamlines in eddies.
+JACCARD_RESOLUTION = 50        # Resolution for the Jaccard index computation.
