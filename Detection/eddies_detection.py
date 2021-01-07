@@ -26,6 +26,7 @@ from datetime import timedelta as delta
 
 from classes import StreamLine, Eddy
 from constants import EQUATORIAL_EARTH_RADIUS,MIN_STREAMLINE_IN_EDDIES
+from constants import EDDY_MIN_RADIUS
 
 
 def get_traj_with_parcels(date,runtime,delta_time,particle_grid_step,stream_data_fname):
@@ -372,7 +373,7 @@ def find_eddies(stream_line_list):
         return []
     k0 = 0
     sl = stream_line_list[k0]
-    while abs(sl.winding_angle)<2*np.pi and k0<nb_sl-1:
+    while abs(sl.winding_angle)<2*np.pi*0.9 and k0<nb_sl-1:
         k0 +=1
         sl = stream_line_list[k0]
     if nb_sl==k0:
@@ -386,7 +387,7 @@ def find_eddies(stream_line_list):
     # Put each streamline into an eddy if the winding angle is greater than 2 pi
     for k in range(k0+1,len(stream_line_list)):
         sl = stream_line_list[k]
-        if abs(sl.winding_angle)<2*np.pi:
+        if abs(sl.winding_angle)<2*np.pi*0.9:
             continue
 
         # Mean radius of the stream line
@@ -418,10 +419,12 @@ def find_eddies(stream_line_list):
             pre_eddies_center.append(sl.mean_pos)
             pre_eddies_max_radius.append(sl.get_mean_radius())
 
-    # Remove pre eddies without enougth stream lines
+    # Remove pre eddies without enougth stream lines or with a too small radius
     eddies_list = []
     for pre_eddy in pre_eddies_list:
         if len(pre_eddy) >= MIN_STREAMLINE_IN_EDDIES:
-            eddies_list.append(Eddy(pre_eddy))
+            eddy = Eddy(pre_eddy)
+            if np.sqrt(np.sum(eddy.axis_len**2)) > EDDY_MIN_RADIUS:
+                eddies_list.append(eddy)
 
     return eddies_list

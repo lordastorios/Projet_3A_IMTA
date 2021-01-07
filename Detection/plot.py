@@ -132,13 +132,11 @@ class StreamPlot:
             # Plot axis
             self.ax.arrow(centers[k,0],centers[k,1],
                 axes_dir[k,0,0]*axes_len[k,0]*1.5,
-                -axes_dir[k,0,1]*axes_len[k,0]*1.5,
-                head_width=0.1,head_length=0.1,fc="black",ec="black")
+                -axes_dir[k,0,1]*axes_len[k,0]*1.5)
 
             self.ax.arrow(centers[k,0],centers[k,1],
                 axes_dir[k,1,0]*axes_len[k,1]*1.5,
-                -axes_dir[k,1,1]*axes_len[k,1]*1.5,
-                head_width=0.1,head_length=0.1,fc="black",ec="black")
+                -axes_dir[k,1,1]*axes_len[k,1]*1.5)
 
     def plot_catalogue(self,eddies_path):
         """ Plot the center of the eddies in the catalogue.

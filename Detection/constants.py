@@ -14,8 +14,11 @@ __email__      = ["guillaume.ghienne@imt-atlantique.net",
                   "alexandre.perier@imt-atlantique.net"]
 
 
-EDDY_MIN_AXIS_LEN =1e-2        # Axis length for ellipses representing eddies.
+EDDY_MIN_AXIS_LEN =1e-2        # Axis length inferior limit for ellipses
+                               # representing eddies.
 EDDY_AXIS_PRECISION = 1e-4     # Stop criterion for gradient descente.
+EDDY_MIN_RADIUS = 0.2          # Eddies with axis len verifying (a**2 + b**2)
+                               # lower than this parameter are discared. 
 EQUATORIAL_EARTH_RADIUS = 6378.137e3
-MIN_STREAMLINE_IN_EDDIES = 3   # Number for streamlines in eddies.
+MIN_STREAMLINE_IN_EDDIES = 6   # Number for streamlines in eddies.
 JACCARD_RESOLUTION = 50        # Resolution for the Jaccard index computation.

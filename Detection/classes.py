@@ -13,7 +13,9 @@ __email__      = ["guillaume.ghienne@imt-atlantique.net",
                   "alexandre.perier@imt-atlantique.net"]
 
 import numpy as np
+
 from tools import grad_desc
+from constants import EQUATORIAL_EARTH_RADIUS
 
 
 class StreamLine:
@@ -49,7 +51,6 @@ class StreamLine:
             between 3 consecutive points in the line. Unit is the rad.s**-1
 
     """
-    R = 6378.137e3
 
     def __init__(self, coord_list, delta_time, cut_lines = True):
         self.coord_list = np.array(coord_list,dtype=float)
@@ -63,10 +64,10 @@ class StreamLine:
         if self.nb_points<=1:
             self.length = 0
         else:
-            ldiff_degree     = self.coord_list[1:]-self.coord_list[:-1]
-            ldiff_meter      = ldiff_degree*np.pi*self.R/180
+            ldiff_degree   = self.coord_list[1:]-self.coord_list[:-1]
+            ldiff_meter    =ldiff_degree*np.pi*EQUATORIAL_EARTH_RADIUS/180
             ldiff_meter[:,0]*= np.cos(self.mean_pos[1]*np.pi/180)
-            self.length      = np.sum(np.sqrt(ldiff_meter[:,0]**2+
+            self.length    = np.sum(np.sqrt(ldiff_meter[:,0]**2+
                                               ldiff_meter[:,1]**2))
 
     def _set_winding_angle_and_angular_velocity(self,delta_time,cut_lines):
@@ -90,8 +91,8 @@ class StreamLine:
         """
         
         coord = self.coord_list[:,0]+1j*self.coord_list[:,1]
+        coord += coord.real*(np.cos(self.mean_pos[1]*np.pi/180)-1)
         vectors = coord[1:]-coord[:-1]
-        vectors += vectors.real*(np.cos(self.mean_pos[1]*np.pi/180)-1)
 
         # Remove the null vectors
         not_null_vect = vectors!=0
@@ -108,47 +109,41 @@ class StreamLine:
             self.winding_angle = 0
             self.angular_velocities = 0
         else:
-
-            # Compute the angles
-            angles = np.angle(vectors[1:]/vectors[:-1])
-
             # Find the shortest sub streamline with winding angle >= 2 pi (only
-            # if it exist.
-            cumsum_angles = np.cumsum(angles)
-            max_winding   = max(cumsum_angles)-min(cumsum_angles)
-            if cut_lines and max_winding>2*np.pi:
+            # if it exist).
+            if cut_lines:
                 cumsum_norms = np.cumsum(norms)
 
-                min_len = self.length
+                min_ratio = 1
 
-                # xy    : * (* * * *) * *  nb_points
-                # vect  :  - (- - -) - -   nb_points-1
-                # angle :   o (o o) o o    nb_points-2
-                for start_id in range(self.nb_points-2):
+                min_end_id = 0
+                min_start_id = self.nb_points-2
 
-                    start_angle = cumsum_angles[start_id]
-                    start_norm  = cumsum_norms [start_id]
+                for start_id in range(self.nb_points-1):
+                    start_norm  = cumsum_norms[start_id]
+                    start_pts   = coord[start_id]
+                    for end_id in range(start_id,self.nb_points-1):
+                        curr_len = cumsum_norms[end_id]-start_norm
+                        start_end_dist = abs(coord[end_id] - start_pts)
+                        ratio = start_end_dist/curr_len
+                        if ratio <= min_ratio:
+                            min_ratio = ratio
+                            min_end_id = end_id
+                            min_start_id = start_id
 
-                    for end_id in range(start_id,self.nb_points-2):
-                        curr_ang = abs(cumsum_angles[end_id]-start_angle)
-                        if abs(curr_ang) > 2*np.pi:
-                            curr_len = cumsum_norms[end_id]-start_norm
-                            if curr_len < min_len:
-                                min_len = curr_len
-                                min_end_id = end_id
-                                min_start_id = start_id
 
                 # Recompute the first attributs after taking the sub streamline
-                self.coord_list = np.array(self.coord_list[min_start_id:min_end_id+3],
+                self.coord_list = np.array(self.coord_list[min_start_id:min_end_id+1],
                     dtype=float)
-                self.nb_points = (min_end_id+2 - min_start_id) + 1
-                self.length = min_len
+                self.nb_points = (min_end_id - min_start_id) + 1
+                self.length = cumsum_norms[end_id]-cumsum_norms[start_id]
                 self.mean_pos = np.mean(self.coord_list,axis=0)
 
                 # Recompute the sub angle list and delta_time
-                angles = np.array(angles[min_start_id:min_end_id+1])
+                angles = np.angle(vectors[1:]/vectors[:-1])
+                angles = np.array(angles[min_start_id:min_end_id-1])
                 if type(delta_time*1.) != float:
-                    delta_time = np.array(delta_time[min_start_id:min_end_id+2])
+                    delta_time = np.array(delta_time[min_start_id:min_end_id])
 
             # Set the winding angle and the angular velocity
             self.winding_angle = np.sum(angles)
