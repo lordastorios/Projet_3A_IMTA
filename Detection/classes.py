@@ -276,3 +276,103 @@ class Eddy:
             nb_angular_velocities += len(w_list)
             sum_angular_velocities    += np.sum(w_list)
         self.angular_velocity = sum_angular_velocities/nb_angular_velocities
+
+
+class Catalog:
+    """Class used to represent a catalog of eddies and their successors.
+
+    Args:
+        analogs (array_like) : 6 parameters (ax 1) of different eddies (ax 0)
+        successors (aaray like) : parameters of corresponding successors.
+
+    Attributes:
+        analogs (array_like) : 6 parameters (ax 1) of different eddies (ax 0)
+        successors (array like) : parameters of corresponding successors.
+
+    """
+
+    def __init__(self, analogs, successors):
+        self.analogs = analogs
+        self.successors = successors
+
+class Observation:
+    """Class used to represent observation of eddies and give time scale.
+
+    Args:
+        values (array_like) : 6 parameters (axis 1) of different observed eddies
+            (axis 0). np.nan if no observed parameter.
+        time (array like) : times corresponding to observation and desired
+            prediction.
+
+    Attributes:
+        values (array_like) : 6 parameters (axis 1) of different observed eddies
+            (axis 0). np.nan if no observed parameter.
+        time (array like) : times corresponding to observation and desired
+            prediction.
+
+    """
+
+    def __init__(self,values,time):
+        self.values = values
+        self.time = time
+
+class ForecastingMethod:
+    """Class used to set parameters for the forecasting model.
+
+    Args:
+        k (int) : number of analogs to use during the forecast.
+        neighborhood (array like(6,6)) : a_ij = 1 or 0. 1 if the ith parameter
+            will be used to predict the jth parameter, 0 otherwise
+        catalog(Catalog) : a catalog of analogs and successors
+        regression(String) : chosen regression ('locally_constant', 'increment',
+            'local_linear')
+        sampling(String) : chosen sampler ('gaussian', 'multinomial')
+    Attributes:
+        k (int) : number of analogs to use during the forecast.
+        neighborhood (array like(6,6)) : a_ij = 1 or 0. 1 if the ith parameter
+            will be used to predict the jth parameter, 0 otherwise
+        catalog(Catalog) : a catalog of analogs and successors
+        regression(String) : chosen regression ('locally_constant', 'increment',
+            'local_linear')
+        sampling(String) : chosen sampler ('gaussian', 'multinomial')
+
+    """
+
+    def __init__(self,catalog,k=20,regression="increment"):
+        self.k=k
+        self.neighborhood=np.ones((6,6))
+        self.catalog=catalog
+        self.regression=regression
+        self.sampling="gaussian"
+
+class FilteringMethod:
+    """Class used to set parameters for the filtering model.
+
+    Args:
+        method (String) : chosen method ('AnEnKF', 'AnEnKS')
+        N (int) : number of members
+        B (array_like(6,6)) : modele noise covariance matrix
+        R (array_like(6,6)) : observation noise covariance matrix
+        forecasting_model (ForecastingModel) : ForecastingModel instance
+    Attributes:
+        method (String) : chosen method ('AnEnKF', 'AnEnKS')
+        N (int) : number of members
+        B (array_like(6,6)) : modele noise covariance matrix
+        R (array_like(6,6)) : observation noise covariance matrix
+        forecasting_model (ForecastingModel) : ForecastingModel instance
+        xb (array_like(1,6)) : parameters of the initial eddy
+
+    """
+    def __init__(self,B,R,forecasting_method,method="AnEnKS",N=20):
+        self.method=method
+        self.N=N
+        self.xb=None
+        self.B=B
+        self.R=R
+        self.AF=forecasting_method
+
+    def set_first_eddy(self,xb):
+        self.xb=xb
+
+    def m(self,x):
+        return AnDA_analog_forecasting(x,self.AF)
