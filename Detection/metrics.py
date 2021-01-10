@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
-"""classes.py: This file gathers the constants and global parameters for the
-detection."""
+"""classes.py: This file gathers the functions used for measuring abstract
+distances and similarities."""
 
 __author__     = "G. Ghienne, A. Lefebvre, A. Lerosey, L. Menard, A. Perier"
 __date__       = "December 2020"

@@ -39,10 +39,10 @@ def eddies_tracker(initial_date, list_days, metric_name='Jaccard',nb_prev_day=5,
 
     Returns:
         eddies_path (dict(int : dict(int : classes.Eddy))) : The path of eddies.
-        A unique id is assigned to each eddy so that 2 object 'classes.Eddy'
-        share the same id if and only if they represent the same eddy at
-        different dates. The first key is a date, the second key is the eddy
-        identifier.
+            A unique id is assigned to each eddy so that 2 object 'classes.Eddy'
+            share the same id if and only if they represent the same eddy at
+            different dates. The first key is a date, the second key is the eddy
+            identifier.
 
     """
 
@@ -182,3 +182,4 @@ def track_one_day(date,current_eddies_path,eddies_in_day,current_max_id,metric,n
         current_eddies_path[date][current_max_id] = eddies_in_day[new_eddy_id]
 
     return nb_new_eddies
+

@@ -26,7 +26,8 @@ from classes import StreamLine, Eddy
 
 
 class StreamPlot:
-    """ Matplotlib figure with specific methods for ploting trajectories, vortexes etc.
+    """ Matplotlib figure with specific methods for ploting trajectories, eddies
+    etc.
 
     Matplotlib figure with specific methods for ploting trajectories, vortexes,
     ellipses, from .nc files or from numpy arrays
@@ -115,7 +116,8 @@ class StreamPlot:
                 self.plot_trajectories(eddies[k].sl_list,line_style=line_style)
 
         # Plot ellipses
-        # The angle of the ellipse is computed with 'vect_x - vect_y*1j' because of y-axis inversion for plotting ellispses.
+        # The angle of the ellipse is computed with 'vect_x - vect_y*1j' because
+        # of y-axis inversion for plotting ellispses.
         resize_coeff = 3
         axes_len = np.array([eddies[k].axis_len for k in range(n)])
         axes_dir = np.array([eddies[k].axis_dir for k in range(n)])
