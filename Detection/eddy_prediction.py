@@ -37,8 +37,8 @@ def create_catalog(dt_frame):
 
     """
 
-    analogs=np.zeros((1,2))
-    successors=np.zeros((1,2))
+    analogs=np.zeros((1,6))
+    successors=np.zeros((1,6))
 
     # group by id
     for i in dt_frame.id.drop_duplicates():
