@@ -41,7 +41,7 @@ def create_catalog(dt_frame):
     successors=np.zeros((1,2))
 
     # group by id
-    for i in df.id.drop_duplicates():
+    for i in dt_frame.id.drop_duplicates():
         df_i=dt_frame[dt_frame.id==i].sort_values('date')
 
         # find those with successor
