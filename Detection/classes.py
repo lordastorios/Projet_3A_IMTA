@@ -14,6 +14,8 @@ __email__      = ["guillaume.ghienne@imt-atlantique.net",
 
 import numpy as np
 
+from AnDA_codes.AnDA_analog_forecasting import AnDA_analog_forecasting
+
 from tools import grad_desc
 from constants import EQUATORIAL_EARTH_RADIUS
 
