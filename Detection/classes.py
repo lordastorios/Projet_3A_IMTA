@@ -177,28 +177,47 @@ class Eddy:
     """ Class used to represent a eddy and compute its caracteristics.
 
     Args:
-        sl_list (list of StreamLine) : List of stream line representing the
-            eddy.
+        sl_list (list of StreamLine) : List of streamline representing the eddy.
+        param (list, default=[]) : Parameters of the eddy when it is not
+            initialized from a list of streamlines. It should contain 6 values.
+            The 2 first are the longitude and the latitude of the eddy center.
+            The 2 next are the axis length. The 5th is the angle between the
+            first axis of the ellipse and the x-axis (longitudes). The last is
+            the angular speed. The parameter 'sl_list' is ignored if this
+            parameter is not the default one.
 
     Attributes:
-        sl_list0 (list of StreamLine) : List of stream line representing the
+        sl_list (list of StreamLine) : List of stream line representing the
             eddy.
         nb_sl (int) : Number of stream lines in sl_list.
         center (array_like(2)) : Mean of stream lines center weigthed by
             the stream line length. This represent the stream line center.
-        cov_matrix (np.array(2,2)) : Covariance of all the points on all the
+        cov_matrix (ndarray(2,2)) : Covariance of all the points on all the
             streamlines.
-        axis_len (np.array(2) : Length of the eddy axis.
-        axis_dir (np.array(2,2)) : Direction of the eddy axis.
+        axis_len (ndarray(2) : Length of the eddy axis.
+        axis_dir (ndarray(2,2)) : Direction of the eddy axis, they are computed
+            using the covariance of all the points on all the streamlines.
         angular_velocity (float) : Mean angular velocity of the eddy.
 
     """
-    def __init__(self, sl_list):
-        self.sl_list = list(sl_list)
-        self.nb_sl   = len(self.sl_list)
-        self._set_center()
-        self._set_axis_len_and_dir()
-        self._set_angular_velocity()
+    def __init__(self, sl_list, param=[]):
+        if len(param)==0:
+            self.sl_list = list(sl_list)
+            self.nb_sl   = len(self.sl_list)
+            self._set_center()
+            self._set_axis_len_and_dir()
+            self._set_angular_velocity()
+        elif len(param)==6:
+            self.sl_list= []
+            self.nb_sl  = 0
+            self.center = np.array(param[:2])
+            self.axis_len = np.array(param[2:4])
+            self.axis_dir = np.array([[np.cos(param[4]),-np.sin(param[4])],
+                                      [np.sin(param[4]), np.cos(param[4])]])
+            self.angular_velocity = param[5]
+        else:
+            print("Parameter(s) missing for initialising an eddy")
+
 
     def _set_center(self):
         """ Compute the eddy center.
