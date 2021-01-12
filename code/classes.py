@@ -341,6 +341,10 @@ class Catalog:
         self.analogs = analogs
         self.successors = successors
 
+    def adjust(self,multi):
+        self.analogs=self.analogs*multi
+        self.successors=self.successors*multi
+
 class Observation:
     """Class used to represent observation of eddies and give time scale.
 
@@ -362,6 +366,9 @@ class Observation:
         self.values = values
         self.time = time
 
+    def adjust(self,multi):
+        self.values =self.values*multi
+
 class ForecastingMethod:
     """Class used to set parameters for the forecasting model.
 
@@ -372,7 +379,6 @@ class ForecastingMethod:
         catalog(Catalog) : a catalog of analogs and successors
         regression(String) : chosen regression ('locally_constant', 'increment',
             'local_linear')
-        sampling(String) : chosen sampler ('gaussian', 'multinomial')
     Attributes:
         k (int) : number of analogs to use during the forecast.
         neighborhood (array like(6,6)) : a_ij = 1 or 0. 1 if the ith parameter
@@ -380,11 +386,11 @@ class ForecastingMethod:
         catalog(Catalog) : a catalog of analogs and successors
         regression(String) : chosen regression ('locally_constant', 'increment',
             'local_linear')
-        sampling(String) : chosen sampler ('gaussian', 'multinomial')
+        sampling(String) : chosen sampler ('gaussian')
 
     """
 
-    def __init__(self,catalog,k=20,regression="increment"):
+    def __init__(self,catalog,k=50,regression="increment"):
         self.k=min(k,np.shape(catalog.analogs)[0]-1)
         self.neighborhood=np.ones((6,6))
         self.catalog=catalog
@@ -410,7 +416,7 @@ class FilteringMethod:
         xb (array_like(1,6)) : parameters of the initial eddy
 
     """
-    def __init__(self,B,R,forecasting_method,method="AnEnKS",N=20):
+    def __init__(self,B,R,forecasting_method,method="AnEnKS",N=50):
         self.method=method
         self.N=N
         self.xb=None
@@ -421,6 +427,12 @@ class FilteringMethod:
 
     def set_first_eddy(self,xb):
         self.xb=xb
+
+    def adjust_R(self,multi):
+        self.R=self.R*multi
+
+    def adjust_B(self,multi):
+        self.B=self.B*multi
 
     def m(self,x):
         return AnDA_analog_forecasting(x,self.AF)
