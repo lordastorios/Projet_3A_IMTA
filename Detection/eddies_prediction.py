@@ -16,7 +16,6 @@ __email__      = ["guillaume.ghienne@imt-atlantique.net",
 
 from classes import Eddy,Catalog,Observation,ForecastingMethod,FilteringMethod
 
-from AnDA_codes.AnDA_analog_forecasting import AnDA_analog_forecasting
 from AnDA_codes.AnDA_data_assimilation import AnDA_data_assimilation
 
 import numpy as np
@@ -69,7 +68,7 @@ def calculate_B(catalog):
     """
     return np.diag(np.var(catalog.analogs-catalog.successors,axis=0))
 
-def predict_eddy(eddy, catalog, param_weights=np.ones(6),observation=None, R=np.ones((6,6))/36,filtering_method='default', Tmax=10):
+def predict_eddy(eddy, catalog,observation=None,filtering_method='default', Tmax=10,param_weights=np.ones(6),R=np.ones((6,6))/36):
     """Compute prediction of the parameters of an eddy.
 
     Args:
@@ -101,13 +100,14 @@ def predict_eddy(eddy, catalog, param_weights=np.ones(6),observation=None, R=np.
         forecasting_method = ForecastingMethod(catalog)
         filtering_method = FilteringMethod(B,R,forecasting_method)
 
-    # adjust B to weights
-    filtering_method.B=filtering_method.B*param_weights/maxis
+    # adjust B and R to weights
+    filtering_method.B=filtering_method.B*(param_weights/maxis)
+    filtering_method.R=filtering_method.R*(param_weights/maxis)
 
     # find initial eddy parameter
     [x,y] = eddy.center
     [L,l] = eddy.axis_len
-    d = eddy.axis_dir[0]
+    d = np.angle(eddy.axis_dir[0,0]+eddy.axis_dir[1,0]*1j)
     w = eddy.angular_velocity
 
     # conclude the set up of the filtering class giving it the first eddy
@@ -127,6 +127,7 @@ def predict_eddy(eddy, catalog, param_weights=np.ones(6),observation=None, R=np.
 
     # inverse adjustement of weights
     prediction.values=prediction.values*maxis/param_weights
+    observation.values=observation.values*maxis/param_weights
 
     return(prediction)
 
@@ -141,4 +142,33 @@ def get_eddy(prediction,t):
         eddy (classes.Eddy) : eddy corresponding to demanded time.
 
     """
-    return Eddy([],prediction.values[t,:])
+    return Eddy([],param=prediction.values[t,:])
+
+def create_observation(dt_frame,id):
+    """Return a classes.Observation instance corresponding to the observations
+    made of a given eddy
+
+    Args:
+        dt_frame (pd.DataFrame) : a data frame of differents observed eddies
+            containing date,id and parameters.
+        id (int) : id of the eddy on which data assimilation will be done.
+
+    Returns:
+        observation (classes.Observation) : corresponding instance.
+
+    """
+    df_id=dt_frame[dt_frame.id==id]
+
+    tmin,tmax=dt_frame.date.min(),dt_frame.date.max()
+    T=tmax-tmin+1
+    time=np.arange(tmin,tmax+1)
+
+    values=np.zeros((T,6))
+
+    for t in range(T):
+        if t+tmin in df_id.date.values:
+            values[t,:]=df_id[df_id.date==t+tmin].to_numpy()[:,2:]
+        else:
+            values[t,:]=np.nan
+
+    return Observation(values,time)
