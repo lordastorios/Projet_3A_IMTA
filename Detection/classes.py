@@ -16,7 +16,7 @@ __email__ = [
 
 import numpy as np
 
-# from AnDA_codes.AnDA_analog_forecasting import AnDA_analog_forecasting
+from AnDA_codes.AnDA_analog_forecasting import AnDA_analog_forecasting
 
 from tools import grad_desc, estimate_sea_level_center
 from constants import EQUATORIAL_EARTH_RADIUS
@@ -324,7 +324,6 @@ class Eddy:
             sum_angular_velocities += np.sum(w_list)
         self.angular_velocity = sum_angular_velocities / nb_angular_velocities
 
-
 class Catalog:
     """Class used to represent a catalog of eddies and their successors.
 
@@ -341,7 +340,6 @@ class Catalog:
     def __init__(self, analogs, successors):
         self.analogs = analogs
         self.successors = successors
-
 
 class Observation:
     """Class used to represent observation of eddies and give time scale.
@@ -360,10 +358,9 @@ class Observation:
 
     """
 
-    def __init__(self, values, time):
+    def __init__(self,values,time):
         self.values = values
         self.time = time
-
 
 class ForecastingMethod:
     """Class used to set parameters for the forecasting model.
@@ -387,13 +384,12 @@ class ForecastingMethod:
 
     """
 
-    def __init__(self, catalog, k=20, regression="increment"):
-        self.k = k
-        self.neighborhood = np.ones((6, 6))
-        self.catalog = catalog
-        self.regression = regression
-        self.sampling = "gaussian"
-
+    def __init__(self,catalog,k=20,regression="increment"):
+        self.k=min(k,np.shape(catalog.analogs)[0]-1)
+        self.neighborhood=np.ones((6,6))
+        self.catalog=catalog
+        self.regression=regression
+        self.sampling="gaussian"
 
 class FilteringMethod:
     """Class used to set parameters for the filtering model.
@@ -407,23 +403,24 @@ class FilteringMethod:
     Attributes:
         method (String) : chosen method ('AnEnKF', 'AnEnKS')
         N (int) : number of members
+        H (array_like(6,6)) : matrix of state transition
         B (array_like(6,6)) : modele noise covariance matrix
         R (array_like(6,6)) : observation noise covariance matrix
         forecasting_model (ForecastingModel) : ForecastingModel instance
         xb (array_like(1,6)) : parameters of the initial eddy
 
     """
+    def __init__(self,B,R,forecasting_method,method="AnEnKS",N=20):
+        self.method=method
+        self.N=N
+        self.xb=None
+        self.H=np.eye(6)
+        self.B=B
+        self.R=R
+        self.AF=forecasting_method
 
-    def __init__(self, B, R, forecasting_method, method="AnEnKS", N=20):
-        self.method = method
-        self.N = N
-        self.xb = None
-        self.B = B
-        self.R = R
-        self.AF = forecasting_method
+    def set_first_eddy(self,xb):
+        self.xb=xb
 
-    def set_first_eddy(self, xb):
-        self.xb = xb
-
-    def m(self, x):
-        return AnDA_analog_forecasting(x, self.AF)
+    def m(self,x):
+        return AnDA_analog_forecasting(x,self.AF)
