@@ -88,21 +88,27 @@ def predict_eddy(eddy, catalog,observation=None,filtering_method='default', Tmax
 
     """
 
+    # create a nan observation is observation=None
+    if observation==None:
+        values=np.full((Tmax,6), np.nan)
+        time=np.arange(Tmax)
+        observation=Observation(values,time)
+
     # adjustement to attribute desired weights to parameters
-    maxis = np.max(np.abs(catalog.analogs),axis=0)
-    catalog.analogs=catalog.analogs*param_weights/maxis
-    catalog.successors=catalog.successors*param_weights/maxis
+    multi = param_weights/np.max(np.abs(catalog.analogs),axis=0)
+    catalog.adjust(multi)
+    observation.adjust(multi)
 
     # use default parameters
     if filtering_method=='default':
-
         B = calculate_B(catalog)
         forecasting_method = ForecastingMethod(catalog)
-        filtering_method = FilteringMethod(B,R,forecasting_method)
+        filtering_method = FilteringMethod(B,R*multi**2,forecasting_method)
 
-    # adjust B and R to weights
-    filtering_method.B=filtering_method.B*(param_weights/maxis)
-    filtering_method.R=filtering_method.R*(param_weights/maxis)
+    else:
+        # adjust B and R to weights
+        filtering_method.adjust_B(multi**2)
+        filtering_method.adjust_R(multi**2)
 
     # find initial eddy parameter
     [x,y] = eddy.center
@@ -111,23 +117,14 @@ def predict_eddy(eddy, catalog,observation=None,filtering_method='default', Tmax
     w = eddy.angular_velocity
 
     # conclude the set up of the filtering class giving it the first eddy
-    filtering_method.set_first_eddy(np.array([x,y,L,l,d,w])*param_weights/maxis)
-
-    # create a nan observation is observation=None
-    if observation==None:
-        values=np.full((Tmax,6), np.nan)
-        time=np.arange(Tmax)
-        observation=Observation(values,time)
-
-    # adjust observation with corresponding weights
-    observation.values=observation.values*param_weights/maxis
+    filtering_method.set_first_eddy(np.array([x,y,L,l,d,w])*multi)
 
     # compute data assimilation
     prediction=AnDA_data_assimilation(observation, filtering_method)
 
     # inverse adjustement of weights
-    prediction.values=prediction.values*maxis/param_weights
-    observation.values=observation.values*maxis/param_weights
+    prediction.values=prediction.values/multi
+    observation.adjust(1/multi)
 
     return(prediction)
 
