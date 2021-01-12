@@ -100,6 +100,7 @@ class StreamLine:
         not_null_vect = vectors!=0
         vectors = vectors[not_null_vect]
         norms = abs(vectors)
+        angles = np.angle(vectors[1:]/vectors[:-1])
 
         if type(delta_time*1.) != float:
             delta_time=delta_time[not_null_vect]
@@ -142,7 +143,6 @@ class StreamLine:
                 self.mean_pos = np.mean(self.coord_list,axis=0)
 
                 # Recompute the sub angle list and delta_time
-                angles = np.angle(vectors[1:]/vectors[:-1])
                 angles = np.array(angles[min_start_id:min_end_id-1])
                 if type(delta_time*1.) != float:
                     delta_time = np.array(delta_time[min_start_id:min_end_id])
