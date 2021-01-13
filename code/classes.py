@@ -403,36 +403,32 @@ class FilteringMethod:
     Args:
         method (String) : chosen method ('AnEnKF', 'AnEnKS')
         N (int) : number of members
-        B (array_like(6,6)) : modele noise covariance matrix
         R (array_like(6,6)) : observation noise covariance matrix
         forecasting_model (ForecastingModel) : ForecastingModel instance
     Attributes:
         method (String) : chosen method ('AnEnKF', 'AnEnKS')
         N (int) : number of members
         H (array_like(6,6)) : matrix of state transition
-        B (array_like(6,6)) : modele noise covariance matrix
+        B (array_like(6,6)) : control-input model
         R (array_like(6,6)) : observation noise covariance matrix
         forecasting_model (ForecastingModel) : ForecastingModel instance
         xb (array_like(1,6)) : parameters of the initial eddy
 
     """
-    def __init__(self,B,R,forecasting_method,method="AnEnKS",N=50):
+    def __init__(self,R,forecasting_method,method="AnEnKS",N=50):
         self.method=method
         self.N=N
         self.xb=None
         self.H=np.eye(6)
-        self.B=B
+        self.B=np.eye(6)
         self.R=R
         self.AF=forecasting_method
 
     def set_first_eddy(self,xb):
         self.xb=xb
 
-    def adjust_R(self,multi):
+    def adjust(self,multi):
         self.R=self.R*multi
-
-    def adjust_B(self,multi):
-        self.B=self.B*multi
 
     def m(self,x):
         return AnDA_analog_forecasting(x,self.AF)
