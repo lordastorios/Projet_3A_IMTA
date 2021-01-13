@@ -55,19 +55,6 @@ def create_catalog(dt_frame):
 
     return Catalog(analogs[1:,:],successors[1:,:])
 
-def calculate_B(catalog):
-    """Return a diagonal variance matrix of parametrs variations in the catalog.
-
-    Args:
-        catlaog(classes.Catalog) : catalog used later for forecasting.
-
-    Returns:
-        B (np.array(6,6)) : diagonal variance matrix of parametrs variations in
-            the catalog.
-
-    """
-    return np.diag(np.var(catalog.analogs-catalog.successors,axis=0))
-
 def predict_eddy(eddy, catalog,observation=None,filtering_method='default', Tmax=10,param_weights=np.ones(6),R=np.ones((6,6))/36):
     """Compute prediction of the parameters of an eddy.
 
@@ -101,14 +88,12 @@ def predict_eddy(eddy, catalog,observation=None,filtering_method='default', Tmax
 
     # use default parameters
     if filtering_method=='default':
-        B = calculate_B(catalog)
         forecasting_method = ForecastingMethod(catalog)
-        filtering_method = FilteringMethod(B,R*multi**2,forecasting_method)
+        filtering_method = FilteringMethod(R*multi**2,forecasting_method)
 
     else:
         # adjust B and R to weights
-        filtering_method.adjust_B(multi**2)
-        filtering_method.adjust_R(multi**2)
+        filtering_method.adjust(multi**2)
 
     # find initial eddy parameter
     [x,y] = eddy.center
