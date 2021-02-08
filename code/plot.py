@@ -124,9 +124,18 @@ class StreamPlot:
         resize_coeff = 3
         axes_len = np.array([eddies[k].axis_len for k in range(n)])
         axes_dir = np.array([eddies[k].axis_dir for k in range(n)])
+        """
         angles = (
             np.array(
                 [np.angle(axes_dir[k, 0, 0] - axes_dir[k, 0, 1] * 1j) for k in range(n)]
+            )
+            / (2 * np.pi)
+            * 360
+        )
+        """
+        angles = (
+            np.array(
+                [np.angle(axes_dir[k, 0, 0] + axes_dir[k, 1, 0] * 1j) for k in range(n)]
             )
             / (2 * np.pi)
             * 360
@@ -149,14 +158,14 @@ class StreamPlot:
                 centers[k, 0],
                 centers[k, 1],
                 axes_dir[k, 0, 0] * axes_len[k, 0] * 1.5,
-                -axes_dir[k, 0, 1] * axes_len[k, 0] * 1.5,
+                axes_dir[k, 1, 0] * axes_len[k, 0] * 1.5,
             )
 
             self.ax.arrow(
                 centers[k, 0],
                 centers[k, 1],
-                axes_dir[k, 1, 0] * axes_len[k, 1] * 1.5,
-                -axes_dir[k, 1, 1] * axes_len[k, 1] * 1.5,
+                axes_dir[k, 0, 1] * axes_len[k, 1] * 1.5,
+                axes_dir[k, 1, 1] * axes_len[k, 1] * 1.5,
             )
 
     def plot_catalogue(self, eddies_path):

@@ -18,7 +18,12 @@ import numpy as np
 
 from AnDA_codes.AnDA_analog_forecasting import AnDA_analog_forecasting
 
-from tools import grad_desc, estimate_sea_level_center
+from tools import (
+    grad_desc,
+    estimate_sea_level_center,
+    compute_u_v,
+    get_interpolized_u_v,
+)
 from constants import EQUATORIAL_EARTH_RADIUS
 import netCDF4 as nc
 import scipy.interpolate as sp_interp
@@ -105,7 +110,7 @@ class StreamLine:
         not_null_vect = vectors != 0
         vectors = vectors[not_null_vect]
         norms = abs(vectors)
-        angles = np.angle(vectors[1:]/vectors[:-1])
+        angles = np.angle(vectors[1:] / vectors[:-1])
 
         if type(delta_time * 1.0) != float:
             delta_time = delta_time[not_null_vect]
@@ -147,7 +152,7 @@ class StreamLine:
                 self.length = cumsum_norms[end_id] - cumsum_norms[start_id]
                 self.mean_pos = np.mean(self.coord_list, axis=0)
 
-                # Recompute the sub angle list and delta_time
+                #  Recompute the sub angle list and delta_time
                 angles = np.array(angles[min_start_id : min_end_id - 1])
                 if type(delta_time * 1.0) != float:
                     delta_time = np.array(delta_time[min_start_id:min_end_id])
@@ -217,8 +222,9 @@ class Eddy:
             self.sl_list = list(sl_list)
             self.nb_sl = len(self.sl_list)
             self._set_center()
-            self._set_axis_len_and_dir()
             self._set_angular_velocity()
+            self._set_axis_len_and_dir()
+
         elif len(param) == 6:
             self.date = date
             self.sl_list = []
@@ -247,6 +253,20 @@ class Eddy:
         sl_wcenter = [sl_center[k] * sl_nb_pts[k] for k in range(self.nb_sl)]
         self.center = np.sum(sl_wcenter, axis=0) / np.sum(sl_nb_pts)
 
+    def _set_angular_velocity(self):
+        """Compute the angular velocity of the eddy.
+
+        The angular velocity is the angle variation per time units.
+
+        """
+        nb_angular_velocities = 0
+        sum_angular_velocities = 0
+        for sl_id in range(self.nb_sl):
+            w_list = self.sl_list[sl_id].angular_velocities
+            nb_angular_velocities += len(w_list)
+            sum_angular_velocities += np.sum(w_list)
+        self.angular_velocity = sum_angular_velocities / nb_angular_velocities
+
     def _set_axis_len_and_dir(self):
         """Compute the axis direction and lengths for the ellipse
 
@@ -267,13 +287,14 @@ class Eddy:
         merged_coord_list[:, 1] -= self.center[1]
         cov_matrix = np.cov(merged_coord_list.T)
         self.axis_dir = np.linalg.eig(cov_matrix)[1]
-
         # Rotate and center the points so that the ellipse equation can be
         # written "(x/a)**2 + (y/b)**2 = 1"
-        angles = np.angle(self.axis_dir[:, 0] + 1j * self.axis_dir[:, 1])
+        # angles = np.angle(self.axis_dir[:, 0] + 1j * self.axis_dir[:, 1])
+        angles = np.angle(self.axis_dir[0, :] + 1j * self.axis_dir[1, :])
         angle = angles[0]
+
         rotation = np.array(
-            [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]]
+            [[np.cos(angle), np.sin(angle)], [-np.sin(angle), np.cos(angle)]]
         )
         aligned_points = np.dot(rotation, merged_coord_list.T).T
 
@@ -299,30 +320,39 @@ class Eddy:
         a, b = grad_desc(error, grad_error)
         self.axis_len = np.array([a, b])
 
+        # self.axis_len = np.linalg.eig(cov_matrix)[0]
         h0 = estimate_sea_level_center(
             self.date,
             self.center,
             aligned_points,
             self.axis_len,
+            self.axis_dir,
+            self.angular_velocity,
             angle,
             stream_data_fname="../data/data.nc",
             R=EQUATORIAL_EARTH_RADIUS,
         )
         print("h0: ", h0)
 
-    def _set_angular_velocity(self):
-        """Compute the angular velocity of the eddy.
-
-        The angular velocity is the angle variation per time units.
-
+        # Compute theorical u,v and compare to measured (interpolized) u,v
+        n_to_evaluate = 1
         """
-        nb_angular_velocities = 0
-        sum_angular_velocities = 0
-        for sl_id in range(self.nb_sl):
-            w_list = self.sl_list[sl_id].angular_velocities
-            nb_angular_velocities += len(w_list)
-            sum_angular_velocities += np.sum(w_list)
-        self.angular_velocity = sum_angular_velocities / nb_angular_velocities
+        zone = np.zeros((n_to_evaluate, 2))
+        if np.argmin(self.axis_len) == 0:
+            zone[:, 0] = np.linspace(-self.axis_len[0], self.axis_len[0], n_to_evaluate)
+        else:
+            zone[:, 1] = np.linspace(-self.axis_len[1], self.axis_len[1], n_to_evaluate)
+        """
+
+        zone = np.array([self.axis_len[0], 0])
+        u_v_evaluated = compute_u_v(zone, angle, self.center, self.axis_len, h0)
+        print("u and v evaluated: ", u_v_evaluated)
+        zone = np.array([self.axis_len[0], 0])
+        u_v_measured = get_interpolized_u_v(
+            zone, self.date, self.center, angle, stream_data_fname="../data/data.nc"
+        )
+        print("u and v measured: ", u_v_measured)
+
 
 class Catalog:
     """Class used to represent a catalog of eddies and their successors.
@@ -341,9 +371,10 @@ class Catalog:
         self.analogs = analogs
         self.successors = successors
 
-    def adjust(self,multi):
-        self.analogs=self.analogs*multi
-        self.successors=self.successors*multi
+    def adjust(self, multi):
+        self.analogs = self.analogs * multi
+        self.successors = self.successors * multi
+
 
 class Observation:
     """Class used to represent observation of eddies and give time scale.
@@ -362,12 +393,13 @@ class Observation:
 
     """
 
-    def __init__(self,values,time):
+    def __init__(self, values, time):
         self.values = values
         self.time = time
 
-    def adjust(self,multi):
-        self.values =self.values*multi
+    def adjust(self, multi):
+        self.values = self.values * multi
+
 
 class ForecastingMethod:
     """Class used to set parameters for the forecasting model.
@@ -390,12 +422,13 @@ class ForecastingMethod:
 
     """
 
-    def __init__(self,catalog,k=50,regression="increment"):
-        self.k=min(k,np.shape(catalog.analogs)[0]-1)
-        self.neighborhood=np.ones((6,6))
-        self.catalog=catalog
-        self.regression=regression
-        self.sampling="gaussian"
+    def __init__(self, catalog, k=50, regression="increment"):
+        self.k = min(k, np.shape(catalog.analogs)[0] - 1)
+        self.neighborhood = np.ones((6, 6))
+        self.catalog = catalog
+        self.regression = regression
+        self.sampling = "gaussian"
+
 
 class FilteringMethod:
     """Class used to set parameters for the filtering model.
@@ -415,20 +448,21 @@ class FilteringMethod:
         xb (array_like(1,6)) : parameters of the initial eddy
 
     """
-    def __init__(self,R,forecasting_method,method="AnEnKS",N=50):
-        self.method=method
-        self.N=N
-        self.xb=None
-        self.H=np.eye(6)
-        self.B=np.eye(6)
-        self.R=R
-        self.AF=forecasting_method
 
-    def set_first_eddy(self,xb):
-        self.xb=xb
+    def __init__(self, R, forecasting_method, method="AnEnKS", N=50):
+        self.method = method
+        self.N = N
+        self.xb = None
+        self.H = np.eye(6)
+        self.B = np.eye(6)
+        self.R = R
+        self.AF = forecasting_method
 
-    def adjust(self,multi):
-        self.R=self.R*multi
+    def set_first_eddy(self, xb):
+        self.xb = xb
 
-    def m(self,x):
-        return AnDA_analog_forecasting(x,self.AF)
+    def adjust(self, multi):
+        self.R = self.R * multi
+
+    def m(self, x):
+        return AnDA_analog_forecasting(x, self.AF)

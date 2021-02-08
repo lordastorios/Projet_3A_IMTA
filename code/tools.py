@@ -100,6 +100,8 @@ def estimate_sea_level_center(
     center_degree,
     aligned_points,
     axis_len,
+    axis_dir,
+    angular_velocity,
     theta,
     stream_data_fname,
     R=EQUATORIAL_EARTH_RADIUS,
@@ -117,7 +119,7 @@ def estimate_sea_level_center(
     R: equatorial earth radius
 
     returns:
-    h0 : sea level at center of eddy (unity??)
+    h0 : sea level at center of eddy (meter)
     """
     # Loading data
     data_set = nc.Dataset(stream_data_fname)
@@ -147,203 +149,96 @@ def estimate_sea_level_center(
     rotation_inv = np.array(
         [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
     )
-    coordinate_cartesian = np.dot(rotation_inv, aligned_points.T).T
-    coordinate_cartesian[:, 0] += center_degree[0]
-    coordinate_cartesian[:, 1] += center_degree[1]
 
-    # Setting coordinate in meter
-    center_meter = convert_from_degree_to_meter(center_degree, R)
-    coordinate_cartesian_in_meter = np.zeros(np.shape(coordinate_cartesian))
-    for point in range(len(coordinate_cartesian_in_meter)):
-        coordinate_cartesian_in_meter[point] = convert_from_degree_to_meter(
-            coordinate_cartesian[point], R
-        )
+    # Approximation of Rx and Ry in meter
+    Rx = axis_len[0] * np.pi * R / 180
+    Ry = axis_len[1] * np.pi * R / 180
 
-    # First approximation of R_x and R_y in meter
-    R_x = axis_len[0] * np.pi * R / 180
-    R_y = axis_len[1] * np.pi * R / 180
-    print("center: ", center_degree)
+    # 3rd method to approximate Rx, Ry in meter
+    point_rx = np.array([axis_len[0], 0])
+    point_ry = np.array([0, axis_len[1]])
+    point_rx = np.dot(rotation_inv, point_rx.T).T
+    point_ry = np.dot(rotation_inv, point_ry.T).T
 
-    # Zone of interest for sea_level_center estimation (points on axes of eddy )
-    """
-    #zone of interest for first approach
-    nb_points_estimation = 50
-    x_interest = np.zeros((nb_points_estimation, 2))
-    x_interest[:, 0] = np.linspace(
-        np.min(aligned_points[:, 0]),
-        np.max(aligned_points[:, 0]),
-        num=nb_points_estimation,
-    )
-    y_interest = np.zeros((nb_points_estimation, 2))
-    y_interest[:, 1] = np.linspace(
-        np.min(aligned_points[:, 1]),
-        np.max(aligned_points[:, 1]),
-        num=nb_points_estimation,
-    )
-    """
-    # Zone of interest for 2nd approach
-    nb_points_estimation = 50
-    x_interest = np.zeros((nb_points_estimation, 2))
-    x_interest[:, 0] = np.linspace(
-        axis_len[0] / np.sqrt(2),
-        axis_len[0] / np.sqrt(2),
-        num=nb_points_estimation,
-    )
-    y_interest = np.zeros((nb_points_estimation, 2))
-    y_interest[:, 1] = np.linspace(
-        axis_len[1] / np.sqrt(2),
-        axis_len[1] / np.sqrt(2),
-        num=nb_points_estimation,
-    )
+    point_rx_meter = convert_from_degree_to_meter(point_rx, center_degree[1], R)
+    point_ry_meter = convert_from_degree_to_meter(point_ry, center_degree[1], R)
 
-    # Setting point of interest for sea level estimation in correct coordiates
+    Rx2 = np.linalg.norm(point_rx_meter)
+    Ry2 = np.linalg.norm(point_ry_meter)
+
+    # For unkown reason, Rx2 and Ry2 aren't equal to Rx,Ry.. error in the convert_from_degree_to_meter function?
+
+    # point to use to compute h0 using max speed: speed is max at Rx or Ry
+    xmax = np.array([axis_len[0], 0])
+    ymax = np.array([0, axis_len[1]])
 
     # Setting coordinates in cartesian space in degree
-    x_interest = np.dot(rotation_inv, x_interest.T).T
-    y_interest = np.dot(rotation_inv, y_interest.T).T
-    x_interest[:, 0] += center_degree[0]
-    x_interest[:, 1] += center_degree[1]
-    y_interest[:, 0] += center_degree[0]
-    y_interest[:, 1] += center_degree[1]
-    # Setting coordinates in meter
-    set_interest1 = np.zeros(np.shape(x_interest))
-    set_interest2 = np.zeros(np.shape(x_interest))
-    for point in range(len(set_interest1)):
-        set_interest1[point] = convert_from_degree_to_meter(x_interest[point], R)
-    for point in range(len(set_interest2)):
-        set_interest2[point] = convert_from_degree_to_meter(y_interest[point], R)
+
+    xmax = np.dot(rotation_inv, xmax.T).T
+    ymax = np.dot(rotation_inv, ymax.T).T
+    xmax += center_degree
+    ymax += center_degree
 
     # Defining needed constant
     f_corriolis = 10e-4
     g_pesanteur = 9.82
-    a = np.cos(theta) ** 2 / (2 * R_x ** 2) + np.sin(theta) ** 2 / (2 * R_y ** 2)
-    b = -np.sin(2 * theta) / (4 * R_x ** 2) + np.sin(2 * theta) / (4 * R_y ** 2)
-    c = np.sin(theta) ** 2 / (2 * R_x ** 2) + np.cos(theta) ** 2 / (2 * R_y ** 2)
 
-    # Computing sea_level at center of eddy
+    # We compute h0 using the max value of the current at Ry
 
-    """ First approach, using derivation of the level of sea and the measured current
-    # Considering axis x of eddy ,deriving with respect to x
+    v_max = v_interpolized(ymax[0], ymax[1])
+    u_max = u_interpolized(ymax[0], ymax[1])
+    max_speed = np.sqrt(v_max ** 2 + u_max ** 2)
+    h0 = max_speed * f_corriolis * Ry2 / (g_pesanteur * np.exp(-0.5))
 
-    h0_x = 0
-    for point in range(len(set_interest1)):
-        factor = np.exp(
-            -(
-                a * (set_interest1[point, 0] - center_meter[0]) ** 2
-                - 2
-                * b
-                * (set_interest1[point, 0] - center_meter[0])
-                * (set_interest1[point, 1] - center_meter[1])
-                + c * (set_interest1[point, 1] - center_meter[1]) ** 2
-            )
-        )
-        factor = (
-            factor
-            * g_pesanteur
-            * (
-                -2 * a * (set_interest1[point, 0] - center_meter[0])
-                + 2 * b * (set_interest1[point, 1] - center_meter[1])
-            )
-            / f_corriolis
-        )
-        h_approx = v_interpolized(x_interest[point, 0], x_interest[point, 1]) / factor
-        h0_x += h_approx
-    h0_x /= len(set_interest1)
+    # if anti clockwise rotation, it is a cold eddy and sea level at center is below zero
+    if angular_velocity > 0:
+        h0 = -h0
 
-    # Deriving with respect to y
-    h0_x = 0
-    for point in range(len(set_interest1)):
-        factor = np.exp(
-            -(
-                a * (set_interest1[point, 0] - center_meter[0]) ** 2
-                - 2
-                * b
-                * (set_interest1[point, 0] - center_meter[0])
-                * (set_interest1[point, 1] - center_meter[1])
-                + c * (set_interest1[point, 1] - center_meter[1]) ** 2
-            )
-        )
-        factor = (
-            factor
-            * g_pesanteur
-            * (
-                2 * b * (set_interest1[point, 0] - center_meter[0])
-                - 2 * c * (set_interest1[point, 1] - center_meter[1])
-            )
-            / f_corriolis
-        )
-        h_approx = u_interpolized(x_interest[point, 0], x_interest[point, 1]) / factor
-        h0_x += h_approx
-    h0_x /= len(set_interest1)
-    h0 = h0_x
-
-    For unkown reason this approach doesn't work now
-    """
-
-    # 2nd approach
-    """
-    we make the hypothesis of a circular eddy 2 consecutive time with R=Rx and Ry to compute h0 and we take the average
-    In a circular eddy, the max of current is at r=R/sqrt(2)
-    """
-    h0_x = 0
-    for point in range(len(set_interest1)):
-        v = v_interpolized(x_interest[point, 0], x_interest[point, 1])
-        u = u_interpolized(x_interest[point, 0], x_interest[point, 1])
-        speed = np.sqrt(v ** 2 + u ** 2)
-        hmax = speed * f_corriolis * R_x / (g_pesanteur * np.exp(-0.5))
-        h0_x += hmax
-    h0_x /= len(set_interest1)
-
-    h0_y = 0
-    for point in range(len(set_interest2)):
-        v_max = v_interpolized(y_interest[point, 0], y_interest[point, 1])
-        u_max = u_interpolized(y_interest[point, 0], y_interest[point, 1])
-        max_speed = np.sqrt(v_max ** 2 + u_max ** 2)
-        hmax = max_speed * f_corriolis * R_y / (g_pesanteur * np.exp(-0.5))
-        h0_y += hmax
-    h0_y /= len(set_interest2)
-    h0 = (h0_x + h0_y) / 2
-
+    h0 = float(h0)
+    # else, if clockwise rotation, it is a hot eddy and sea level at center is greater than zero
     return h0
 
 
-def convert_from_degree_to_meter(coord_degree, R=EQUATORIAL_EARTH_RADIUS):
+def convert_from_degree_to_meter(d_degree, lat, R=EQUATORIAL_EARTH_RADIUS):
     """Convert coordinate in degree to coordinate in meter using relations :
     dy = pi * R * dlat / 180.
     dx = pi * R * dlon / 180. * sin(lat*pi/180)
     relation where dx,dy in meter and dlat,dlon in degrees
 
     Args:
-    coord_degree (lon,lat): coordinate in degree in cartesian system. shape(2,) if center of an eddy, shape(1,2) otherwise
+    d_degree (dlon,dlat): differential of coordinate in degree in cartesian system. shape(2,) if center of an eddy, shape(1,2) otherwise
+    lat: latitude of one of the two points on which the differential is computed
     R:equatorial earth radius in meter
 
     Returns:
     coord_meter: coordinate in meter in cartesian system
     """
-    lon, lat = coord_degree[0], coord_degree[1]
-    coord_meter = np.zeros(np.shape(coord_degree))
-    if np.shape(coord_degree) == (2,):
-        lon, lat = coord_degree[0], coord_degree[1]
-        coord_meter[1] = np.pi * R * coord_degree[1] / 180
-        coord_meter[0] = np.pi * R * coord_degree[0] / (180 * np.sin(lat * np.pi / 180))
+    dlon, dlat = d_degree[0], d_degree[1]
+    d_meter = np.zeros(np.shape(d_degree))
+    if np.shape(d_degree) == (2,):
+        dlon, dlat = d_degree[0], d_degree[1]
+        d_meter[1] = np.pi * R * d_degree[1] / 180
+        d_meter[0] = np.pi * R * d_degree[0] / (180 * np.sin(lat * np.pi / 180))
+        d_meter[0] = np.pi * R * d_degree[0] * np.sin(lat * np.pi / 180) / 180
     else:
-        lon, lat = coord_degree[0, 0], coord_degree[0, 1]
-        coord_meter[0, 1] = np.pi * R * coord_degree[0, 1] / 180
-        coord_meter[0, 0] = (
-            np.pi * R * coord_degree[0, 0] / (180 * np.sin(lat * np.pi / 180))
-        )
-    return coord_meter
+        dlon, dlat = d_degree[0, 0], d_degree[0, 1]
+        d_meter[0, 1] = np.pi * R * d_degree[0, 1] / 180
+        d_meter[0, 0] = np.pi * R * d_degree[0, 0] / (180 * np.sin(lat * np.pi / 180))
+        d_meter[0, 0] = np.pi * R * d_degree[0, 0] * np.sin(lat * np.pi / 180) / 180
+
+    return d_meter
 
 
-def compute_u_v(point, theta, sigma_x, sigma_y, sea_level_center):
+def compute_u_v(point, theta, center_degree, axis_len, h0, R=EQUATORIAL_EARTH_RADIUS):
     """Compute the theorical value of u and v at a given point
 
     Args:
-    point: coordinate of point in the referential of the eddy
+    point: coordinate of point in the referential of the eddy in degree
     theta : angle of the eddy with the horizontal axis
-    sigma_x : value of the axes length along axis x in eddy referential
-    sigma_y : value of the axes length along axis y in eddy referential
-    sea_level_center : sea level at the center of the eddy,
+    center_degree: coordinates of the center of the eddy in degree
+    Rx : value of the axes length along axis x in eddy referential
+    Ry : value of the axes length along axis y in eddy referential
+    h0 : sea level at the center of the eddy,
 
     WARNING : x must be along the big axis and y along the small axis
     Returns:
@@ -353,36 +248,102 @@ def compute_u_v(point, theta, sigma_x, sigma_y, sea_level_center):
     # Defining needed constant
     f_corriolis = 10e-4
     rho_sea = 1030
+    g_pesanteur = 9.82
 
-    # Coordinate in referential of the eddy
-    x = pt[0]
-    y = pt[1]
-    # Defining coordinate in cartesian coordinate
-    X = x * np.cos(theta) - y * np.sin(theta)
-    Y = x * np.sin(theta) + y * np.cos(theta)
-    sea_level = (
-        sea_level_center
-        * exp(-(X ** 2) / (2 * sigma_x ** 2))
-        * exp(-(Y ** 2) / (2 * sigma_y ** 2))
+    # rotation matrix
+
+    rotation_inv = np.array(
+        [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
+    )
+    # Setting coordinates in cartesian space
+    point = np.dot(rotation_inv, point.T).T
+    point += center_degree
+
+    # Setting coordinates  in meter
+    point_meter = convert_from_degree_to_meter(point, point[1])
+    center_meter = convert_from_degree_to_meter(center_degree, center_degree[1])
+    X, Y = point_meter[0], point_meter[1]
+    X0, Y0 = center_meter[0], center_meter[1]
+
+    # Approximation of Rx and Ry in meter
+    Rx = axis_len[0] * np.pi * R / 180
+    Ry = axis_len[1] * np.pi * R / 180
+
+    # 3rd method to approximate Rx, Ry in meter
+    point_rx = np.array([axis_len[0], 0])
+    point_ry = np.array([0, axis_len[1]])
+    point_rx = np.dot(rotation_inv, point_rx.T).T
+    point_ry = np.dot(rotation_inv, point_ry.T).T
+
+    point_rx_meter = convert_from_degree_to_meter(point_rx, center_degree[1], R)
+    point_ry_meter = convert_from_degree_to_meter(point_ry, center_degree[1], R)
+
+    Rx2 = np.linalg.norm(point_rx_meter)
+    Ry2 = np.linalg.norm(point_ry_meter)
+
+    # This definition of Rx allow to get a value for u and v but with it we find a value of ~20m for h0
+    # constant to compute sea level
+    a = np.cos(theta) ** 2 / (2 * Rx2 ** 2) + np.sin(theta) ** 2 / (2 * Ry2 ** 2)
+    b = -np.sin(2 * theta) / (4 * Rx2 ** 2) + np.sin(2 * theta) / (4 * Ry2 ** 2)
+    c = np.sin(theta) ** 2 / (2 * Rx2 ** 2) + np.cos(theta) ** 2 / (2 * Ry2 ** 2)
+
+    # Computing sea level
+    sea_level = h0 * np.exp(
+        -(a * (X - X0) ** 2 - 2 * b * (X - X0) * (Y - Y0) + c * (Y - Y0) ** 2)
     )
     # Computing value of u and v at point (X,Y)
-    u = (
-        (f_corriolis / rho_sea)
-        * (X / sigma_x ** 2)
-        * (np.cos(theta) - np.sin(theta))
-        * sea_level
+    u = -g_pesanteur * 2 * (b * (X - X0) - c * (Y - Y0)) * sea_level / f_corriolis
+    v = g_pesanteur * 2 * (b * (Y - Y0) - a * (X - X0)) * sea_level / f_corriolis
+    u_v = np.array([u, v])
+    return u_v
+
+
+def get_interpolized_u_v(point, date, center_degree, theta, stream_data_fname):
+    """Get the interpolized value of u and v at point
+    Args:
+    point: coordinate of point in the referential of the eddy in degree
+    date : the date on which the eddy is detected
+    center_degree : coordinate of center in degree
+    steam_data_fname : name of the stream data file
+    theta: angle of the eddy
+    """
+    # Loading data
+    data_set = nc.Dataset(stream_data_fname)
+    u_1day = data_set["uo"][date, 0, :]
+    v_1day = data_set["vo"][date, 0, :]
+
+    # Data sizes
+    # Data step size is 1/12 degree. Due to the C-grid format, an offset of
+    #  -0.5*1/12 is added to the axis.
+    data_time_size, data_depth_size, data_lat_size, data_lon_size = np.shape(
+        data_set["uo"]
     )
-    v = (
-        -(f_corriolis / rho_sea)
-        * (Y / sigma_y ** 2)
-        * (np.sin(theta) + np.cos(theta))
-        * sea_level
+    longitudes = np.array(data_set["longitude"]) - 1 / 24
+    latitudes = np.array(data_set["latitude"]) - 1 / 24
+
+    # Replace the mask (ie the ground areas) with a null vector field.
+    U = np.array(u_1day)
+    U[U == -32767] = 0
+    V = np.array(v_1day)
+    V[V == -32767] = 0
+
+    # Interpolize continuous u,v from the data array
+    u_interpolized = sp_interp.RectBivariateSpline(longitudes, latitudes, U.T)
+    v_interpolized = sp_interp.RectBivariateSpline(longitudes, latitudes, V.T)
+
+    # Setting coordinate in degree in cartesian space
+    rotation_inv = np.array(
+        [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
     )
+    point = np.dot(rotation_inv, point.T).T
+    point += center_degree
+    u_measured = u_interpolized(point[0], point[1])
+    v_measured = v_interpolized(point[0], point[1])
+    u_v_measured = np.array([float(u_measured), float(v_measured)])
+    return u_v_measured
 
-    return (u, v)
 
-
-def compute_error(points, sigma_x, sigma_y, sea_level_center, data):
+def compute_error(points, Rx, Ry, h0, data):
     """Compute the error between theorical value of u and v and measured values
 
     Args:
