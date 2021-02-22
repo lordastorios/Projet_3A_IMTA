@@ -23,6 +23,11 @@ from tools import (
     estimate_sea_level_center,
     compute_u_v,
     get_interpolized_u_v,
+    compute_error,
+    compute_grad_u_v,
+    compute_gradL1,
+    convert_from_degree_to_meter,
+    convert_from_meter_to_degree,
 )
 from constants import EQUATORIAL_EARTH_RADIUS
 import netCDF4 as nc
@@ -274,6 +279,8 @@ class Eddy:
         length is computed so that sum{(x,y)}{(x/a)**2+(y/b)**2-1} is minimum.
 
         """
+        # Constant
+        R = EQUATORIAL_EARTH_RADIUS
 
         # Compute the covariance matrixe for finding the axis direction
         nb_coord = np.sum([self.sl_list[k].nb_points for k in range(self.nb_sl)])
@@ -321,6 +328,21 @@ class Eddy:
         self.axis_len = np.array([a, b])
 
         # self.axis_len = np.linalg.eig(cov_matrix)[0]
+        # Rx, Ry in meter
+        axis_len_meter = np.zeros((2,))
+        rotation_inv = np.array(
+            [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]]
+        )
+        point_rx = np.array([self.axis_len[0], 0])
+        point_ry = np.array([0, self.axis_len[1]])
+        point_rx = np.dot(rotation_inv, point_rx.T).T
+        point_ry = np.dot(rotation_inv, point_ry.T).T
+        point_rx_meter = convert_from_degree_to_meter(point_rx, self.center[1], R)
+        point_ry_meter = convert_from_degree_to_meter(point_ry, self.center[1], R)
+        axis_len_meter[0] = np.linalg.norm(point_rx_meter)
+        axis_len_meter[1] = np.linalg.norm(point_ry_meter)
+
+        # Esimate h0
         h0 = estimate_sea_level_center(
             self.date,
             self.center,
@@ -332,26 +354,81 @@ class Eddy:
             stream_data_fname="../data/data.nc",
             R=EQUATORIAL_EARTH_RADIUS,
         )
-        print("h0: ", h0)
 
-        # Compute theorical u,v and compare to measured (interpolized) u,v
-        n_to_evaluate = 1
-        """
-        zone = np.zeros((n_to_evaluate, 2))
-        if np.argmin(self.axis_len) == 0:
-            zone[:, 0] = np.linspace(-self.axis_len[0], self.axis_len[0], n_to_evaluate)
-        else:
-            zone[:, 1] = np.linspace(-self.axis_len[1], self.axis_len[1], n_to_evaluate)
-        """
-
-        zone = np.array([self.axis_len[0], 0])
-        u_v_evaluated = compute_u_v(zone, angle, self.center, self.axis_len, h0)
-        print("u and v evaluated: ", u_v_evaluated)
-        zone = np.array([self.axis_len[0], 0])
-        u_v_measured = get_interpolized_u_v(
-            zone, self.date, self.center, angle, stream_data_fname="../data/data.nc"
+        # Compute theorical u,v and get measured (interpolized) u,v
+        u_v_evaluated = compute_u_v(
+            aligned_points, angle, self.center, axis_len_meter, h0
         )
-        print("u and v measured: ", u_v_measured)
+        u_v_measured = get_interpolized_u_v(
+            aligned_points,
+            self.date,
+            self.center,
+            angle,
+            stream_data_fname="../data/data.nc",
+        )
+        # Computing initial error
+        L1init = compute_error(u_v_evaluated, u_v_measured)
+
+        # Gradient descent
+        step_sizex = axis_len_meter[0]
+        step_sizey = axis_len_meter[1]
+        n_iter = 10
+        for iter in range(n_iter):
+            grad_u, grad_v = compute_grad_u_v(
+                aligned_points, angle, self.center, axis_len_meter, h0
+            )
+            gradL1 = compute_gradL1(u_v_evaluated, u_v_measured, grad_u, grad_v)
+
+            axis_len_meter[0] -= step_sizex * gradL1[0]
+            axis_len_meter[1] -= step_sizey * gradL1[1]
+            # Updating Rx and Ry in degreee to recompute h0
+            point_rx_meter = (
+                point_rx_meter * axis_len_meter[0] / np.linalg.norm(point_rx_meter)
+            )
+            point_ry_meter = (
+                point_ry_meter * axis_len_meter[1] / np.linalg.norm(point_ry_meter)
+            )
+            point_rx_degree = convert_from_meter_to_degree(
+                point_rx_meter, self.center[1], R
+            )
+            point_ry_degree = convert_from_meter_to_degree(
+                point_ry_meter, self.center[1], R
+            )
+            self.axis_len[0] = np.linalg.norm(point_rx_degree)
+            self.axis_len[1] = np.linalg.norm(point_ry_degree)
+            h0 = estimate_sea_level_center(
+                self.date,
+                self.center,
+                aligned_points,
+                self.axis_len,
+                self.axis_dir,
+                self.angular_velocity,
+                angle,
+                stream_data_fname="../data/data.nc",
+                R=EQUATORIAL_EARTH_RADIUS,
+            )
+            u_v_evaluated = compute_u_v(
+                aligned_points, angle, self.center, axis_len_meter, h0
+            )
+            L1 = compute_error(u_v_evaluated, u_v_measured)
+        print("L1 : ", L1)
+        print("optimizing: ", L1 <= L1init)
+
+        # Updating Rx,Ry  in degree
+        point_rx_meter = (
+            point_rx_meter * axis_len_meter[0] / np.linalg.norm(point_rx_meter)
+        )
+        point_ry_meter = (
+            point_ry_meter * axis_len_meter[1] / np.linalg.norm(point_ry_meter)
+        )
+        point_rx_degree = convert_from_meter_to_degree(
+            point_rx_meter, self.center[1], R
+        )
+        point_ry_degree = convert_from_meter_to_degree(
+            point_ry_meter, self.center[1], R
+        )
+        self.axis_len[0] = np.linalg.norm(point_rx_degree)
+        self.axis_len[1] = np.linalg.norm(point_ry_degree)
 
 
 class Catalog:

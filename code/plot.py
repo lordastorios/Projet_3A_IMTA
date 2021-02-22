@@ -143,8 +143,8 @@ class StreamPlot:
         for k in range(n):
             ellipse = Ellipse(
                 centers[k, :],
-                axes_len[k, 0] * resize_coeff,
-                axes_len[k, 1] * resize_coeff,
+                axes_len[k, 0] * 2,
+                axes_len[k, 1] * 2,
                 angle=angles[k],
                 color="black",
                 alpha=1,
@@ -157,15 +157,15 @@ class StreamPlot:
             self.ax.arrow(
                 centers[k, 0],
                 centers[k, 1],
-                axes_dir[k, 0, 0] * axes_len[k, 0] * 1.5,
-                axes_dir[k, 1, 0] * axes_len[k, 0] * 1.5,
+                axes_dir[k, 0, 0] * axes_len[k, 0] * 1,
+                axes_dir[k, 1, 0] * axes_len[k, 0] * 1,
             )
 
             self.ax.arrow(
                 centers[k, 0],
                 centers[k, 1],
-                axes_dir[k, 0, 1] * axes_len[k, 1] * 1.5,
-                axes_dir[k, 1, 1] * axes_len[k, 1] * 1.5,
+                axes_dir[k, 0, 1] * axes_len[k, 1] * 1,
+                axes_dir[k, 1, 1] * axes_len[k, 1] * 1,
             )
 
     def plot_catalogue(self, eddies_path):

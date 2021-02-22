@@ -150,11 +150,7 @@ def estimate_sea_level_center(
         [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
     )
 
-    # Approximation of Rx and Ry in meter
-    Rx = axis_len[0] * np.pi * R / 180
-    Ry = axis_len[1] * np.pi * R / 180
-
-    # 3rd method to approximate Rx, Ry in meter
+    # Rx, Ry in meter
     point_rx = np.array([axis_len[0], 0])
     point_ry = np.array([0, axis_len[1]])
     point_rx = np.dot(rotation_inv, point_rx.T).T
@@ -163,20 +159,17 @@ def estimate_sea_level_center(
     point_rx_meter = convert_from_degree_to_meter(point_rx, center_degree[1], R)
     point_ry_meter = convert_from_degree_to_meter(point_ry, center_degree[1], R)
 
-    Rx2 = np.linalg.norm(point_rx_meter)
-    Ry2 = np.linalg.norm(point_ry_meter)
+    Rx = np.linalg.norm(point_rx_meter)
+    Ry = np.linalg.norm(point_ry_meter)
 
-    # For unkown reason, Rx2 and Ry2 aren't equal to Rx,Ry.. error in the convert_from_degree_to_meter function?
+    # Rx = axis_len[0]
+    # Ry = axis_len[1]
 
     # point to use to compute h0 using max speed: speed is max at Rx or Ry
-    xmax = np.array([axis_len[0], 0])
     ymax = np.array([0, axis_len[1]])
 
     # Setting coordinates in cartesian space in degree
-
-    xmax = np.dot(rotation_inv, xmax.T).T
     ymax = np.dot(rotation_inv, ymax.T).T
-    xmax += center_degree
     ymax += center_degree
 
     # Defining needed constant
@@ -184,11 +177,10 @@ def estimate_sea_level_center(
     g_pesanteur = 9.82
 
     # We compute h0 using the max value of the current at Ry
-
     v_max = v_interpolized(ymax[0], ymax[1])
     u_max = u_interpolized(ymax[0], ymax[1])
     max_speed = np.sqrt(v_max ** 2 + u_max ** 2)
-    h0 = max_speed * f_corriolis * Ry2 / (g_pesanteur * np.exp(-0.5))
+    h0 = max_speed * f_corriolis * Ry / (g_pesanteur * np.exp(-0.5))
 
     # if anti clockwise rotation, it is a cold eddy and sea level at center is below zero
     if angular_velocity > 0:
@@ -211,7 +203,7 @@ def convert_from_degree_to_meter(d_degree, lat, R=EQUATORIAL_EARTH_RADIUS):
     R:equatorial earth radius in meter
 
     Returns:
-    coord_meter: coordinate in meter in cartesian system
+    d_meter: differential in meter in cartesian system
     """
     dlon, dlat = d_degree[0], d_degree[1]
     d_meter = np.zeros(np.shape(d_degree))
@@ -229,11 +221,29 @@ def convert_from_degree_to_meter(d_degree, lat, R=EQUATORIAL_EARTH_RADIUS):
     return d_meter
 
 
-def compute_u_v(point, theta, center_degree, axis_len, h0, R=EQUATORIAL_EARTH_RADIUS):
+def convert_from_meter_to_degree(d_meter, lat, R=EQUATORIAL_EARTH_RADIUS):
+    """Convert a differential of coordinates from meter to dregree
+    d_meter=(dx,dy)
+    lat: latitude of one of the two points on which the differential is computed
+    """
+    dx, dy = d_meter[0], d_meter[1]
+    d_degree = np.zeros(np.shape(d_meter))
+    if np.shape(d_degree) == (2,):
+        dx, dy = d_meter[0], d_meter[1]
+        d_degree[1] = d_meter[1] * 180 / (np.pi * R)
+        d_degree[0] = d_meter[0] * 180 / (np.sin(lat * np.pi / 180) * np.pi * R)
+    else:
+        dx, dy = d_meter[0, 0], d_meter[0, 1]
+        d_degree[0, 1] = d_meter[0, 1] * 180 / (np.pi * R)
+        d_degree[0, 0] = d_degree[0, 0] * 180 / (np.sin(lat * np.pi / 180) * np.pi * R)
+    return d_degree
+
+
+def compute_u_v(points, theta, center_degree, axis_len, h0, R=EQUATORIAL_EARTH_RADIUS):
     """Compute the theorical value of u and v at a given point
 
     Args:
-    point: coordinate of point in the referential of the eddy in degree
+    points: ndarray(n,2) coordinate of points in the referential of the eddy in degree
     theta : angle of the eddy with the horizontal axis
     center_degree: coordinates of the center of the eddy in degree
     Rx : value of the axes length along axis x in eddy referential
@@ -255,21 +265,8 @@ def compute_u_v(point, theta, center_degree, axis_len, h0, R=EQUATORIAL_EARTH_RA
     rotation_inv = np.array(
         [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
     )
-    # Setting coordinates in cartesian space
-    point = np.dot(rotation_inv, point.T).T
-    point += center_degree
-
-    # Setting coordinates  in meter
-    point_meter = convert_from_degree_to_meter(point, point[1])
-    center_meter = convert_from_degree_to_meter(center_degree, center_degree[1])
-    X, Y = point_meter[0], point_meter[1]
-    X0, Y0 = center_meter[0], center_meter[1]
-
-    # Approximation of Rx and Ry in meter
-    Rx = axis_len[0] * np.pi * R / 180
-    Ry = axis_len[1] * np.pi * R / 180
-
-    # 3rd method to approximate Rx, Ry in meter
+    """
+    # Rx , Ry in meter
     point_rx = np.array([axis_len[0], 0])
     point_ry = np.array([0, axis_len[1]])
     point_rx = np.dot(rotation_inv, point_rx.T).T
@@ -278,30 +275,46 @@ def compute_u_v(point, theta, center_degree, axis_len, h0, R=EQUATORIAL_EARTH_RA
     point_rx_meter = convert_from_degree_to_meter(point_rx, center_degree[1], R)
     point_ry_meter = convert_from_degree_to_meter(point_ry, center_degree[1], R)
 
-    Rx2 = np.linalg.norm(point_rx_meter)
-    Ry2 = np.linalg.norm(point_ry_meter)
-
-    # This definition of Rx allow to get a value for u and v but with it we find a value of ~20m for h0
+    Rx = np.linalg.norm(point_rx_meter)
+    Ry = np.linalg.norm(point_ry_meter)
+    """
+    Rx = axis_len[0]
+    Ry = axis_len[1]
     # constant to compute sea level
-    a = np.cos(theta) ** 2 / (2 * Rx2 ** 2) + np.sin(theta) ** 2 / (2 * Ry2 ** 2)
-    b = -np.sin(2 * theta) / (4 * Rx2 ** 2) + np.sin(2 * theta) / (4 * Ry2 ** 2)
-    c = np.sin(theta) ** 2 / (2 * Rx2 ** 2) + np.cos(theta) ** 2 / (2 * Ry2 ** 2)
+    a = np.cos(theta) ** 2 / (2 * Rx ** 2) + np.sin(theta) ** 2 / (2 * Ry ** 2)
+    b = -np.sin(2 * theta) / (4 * Rx ** 2) + np.sin(2 * theta) / (4 * Ry ** 2)
+    c = np.sin(theta) ** 2 / (2 * Rx ** 2) + np.cos(theta) ** 2 / (2 * Ry ** 2)
+
+    # Initializing u_v
+    n = len(points)
+    u_v = np.zeros((n, 2))
+    # Setting coordinates in cartesian space
+    points = np.dot(rotation_inv, points.T).T
+    points_meter = np.zeros((n, 2))
+    for i in range(n):
+        points_meter[i] = convert_from_degree_to_meter(points[i], center_degree[1], R)
+
+    dX, dY = points_meter[:, 0], points_meter[:, 1]
 
     # Computing sea level
-    sea_level = h0 * np.exp(
-        -(a * (X - X0) ** 2 - 2 * b * (X - X0) * (Y - Y0) + c * (Y - Y0) ** 2)
-    )
-    # Computing value of u and v at point (X,Y)
-    u = -g_pesanteur * 2 * (b * (X - X0) - c * (Y - Y0)) * sea_level / f_corriolis
-    v = g_pesanteur * 2 * (b * (Y - Y0) - a * (X - X0)) * sea_level / f_corriolis
-    u_v = np.array([u, v])
+    for i in range(n):
+        sea_level = h0 * np.exp(
+            -(a * (dX[i]) ** 2 - 2 * b * (dX[i]) * (dY[i]) + c * (dY[i]) ** 2)
+        )
+        u_v[i, 0] = (
+            -g_pesanteur * 2 * (b * (dX[i]) - c * (dY[i])) * sea_level / f_corriolis
+        )
+        u_v[i, 1] = (
+            g_pesanteur * 2 * (b * (dY[i]) - a * (dX[i])) * sea_level / f_corriolis
+        )
+
     return u_v
 
 
-def get_interpolized_u_v(point, date, center_degree, theta, stream_data_fname):
+def get_interpolized_u_v(points, date, center_degree, theta, stream_data_fname):
     """Get the interpolized value of u and v at point
     Args:
-    point: coordinate of point in the referential of the eddy in degree
+    point: ndarray(n,2) coordinate of point in the referential of the eddy in degree
     date : the date on which the eddy is detected
     center_degree : coordinate of center in degree
     steam_data_fname : name of the stream data file
@@ -335,17 +348,164 @@ def get_interpolized_u_v(point, date, center_degree, theta, stream_data_fname):
     rotation_inv = np.array(
         [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
     )
-    point = np.dot(rotation_inv, point.T).T
-    point += center_degree
-    u_measured = u_interpolized(point[0], point[1])
-    v_measured = v_interpolized(point[0], point[1])
-    u_v_measured = np.array([float(u_measured), float(v_measured)])
+    points = np.dot(rotation_inv, points.T).T
+    points += center_degree
+
+    n = len(points)  # nbr of points
+    u_v_measured = np.zeros((n, 2))
+    for i in range(n):
+        u_v_measured[i, 0] = float(u_interpolized(points[i, 0], points[i, 1]))
+        u_v_measured[i, 1] = float(v_interpolized(points[i, 0], points[i, 1]))
     return u_v_measured
 
 
-def compute_error(points, Rx, Ry, h0, data):
+def compute_error(u_v_evaluated, u_v_measured):
     """Compute the error between theorical value of u and v and measured values
 
     Args:
-    data : u and v measured value
+    point: on which to compute the error
+    u_v_evaluated: ndarray(1,2): thorical [u,v] values computed
+    u_v_measure: ndarray(1,2): measured [u,v] values
+
+    Return:
+    L1 error
+    L2 error
     """
+    L1 = np.zeros(len(u_v_evaluated))
+    for i in range(len(u_v_evaluated)):
+        L1[i] = (u_v_evaluated[i, 0] - u_v_measured[i, 0]) ** 2 + (
+            u_v_evaluated[i, 1] - u_v_measured[i, 1]
+        ) ** 2
+    L1 = np.sum(L1)
+    return L1
+
+
+def compute_grad_u_v(
+    points, theta, center_degree, axis_len, h0, R=EQUATORIAL_EARTH_RADIUS
+):
+    """Compute the gradient of u_evaluated and v_evaluated with respect to Rx and Ry"""
+    # Defining needed constant
+    f_corriolis = 10e-4
+    rho_sea = 1030
+    g_pesanteur = 9.82
+
+    # rotation matrix
+
+    rotation_inv = np.array(
+        [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
+    )
+    """
+    # approximate Rx, Ry in meter
+    point_rx = np.array([axis_len[0], 0])
+    point_ry = np.array([0, axis_len[1]])
+    point_rx = np.dot(rotation_inv, point_rx.T).T
+    point_ry = np.dot(rotation_inv, point_ry.T).T
+
+    point_rx_meter = convert_from_degree_to_meter(point_rx, center_degree[1], R)
+    point_ry_meter = convert_from_degree_to_meter(point_ry, center_degree[1], R)
+
+    Rx = np.linalg.norm(point_rx_meter)
+    Ry = np.linalg.norm(point_ry_meter)
+    """
+    Rx = axis_len[0]
+    Ry = axis_len[1]
+
+    # constant to compute sea level
+    a = np.cos(theta) ** 2 / (2 * Rx ** 2) + np.sin(theta) ** 2 / (2 * Ry ** 2)
+    b = -np.sin(2 * theta) / (4 * Rx ** 2) + np.sin(2 * theta) / (4 * Ry ** 2)
+    c = np.sin(theta) ** 2 / (2 * Rx ** 2) + np.cos(theta) ** 2 / (2 * Ry ** 2)
+
+    # Initializing u_v
+    n = len(points)
+    grad_u = np.zeros((n, 2))
+    grad_v = np.zeros((n, 2))
+
+    # Setting coordinates in cartesian space
+    points = np.dot(rotation_inv, points.T).T
+    points_meter = np.zeros((n, 2))
+    for i in range(n):
+        points_meter[i] = convert_from_degree_to_meter(points[i], center_degree[1], R)
+
+    dX, dY = points_meter[:, 0], points_meter[:, 1]
+
+    # Computing sea level
+    for i in range(n):
+        sea_level = h0 * np.exp(
+            -(a * (dX[i]) ** 2 - 2 * b * (dX[i]) * (dY[i]) + c * (dY[i]) ** 2)
+        )
+        h = -g_pesanteur * 2 * (b * (dX[i]) - c * (dY[i])) / f_corriolis
+        g = g_pesanteur * 2 * (b * (dY[i]) - a * (dX[i])) / f_corriolis
+        hprime_x = (
+            -2
+            * g_pesanteur
+            * (
+                np.sin(2 * theta) * dX[i] / (2 * Rx ** 3)
+                + (np.sin(theta) ** 2) * dY[i] / (Rx ** 3)
+            )
+        )
+        hprime_y = (
+            -2
+            * g_pesanteur
+            * (
+                -np.sin(2 * theta) * dX[i] / (2 * Ry ** 3)
+                + (np.cos(theta) ** 2) * dY[i] / (Ry ** 3)
+            )
+        )
+        gprime_x = (
+            -2
+            * g_pesanteur
+            * (
+                np.sin(2 * theta) * dY[i] / (2 * Rx ** 3)
+                + (np.cos(theta) ** 2) * dX[i] / (Rx ** 3)
+            )
+        )
+        gprime_y = (
+            -2
+            * g_pesanteur
+            * (
+                -np.sin(2 * theta) * dY[i] / (2 * Ry ** 3)
+                + (np.sin(theta) ** 2) * dX[i] / (Ry ** 3)
+            )
+        )
+        sea_level_prime_x = (
+            (
+                (np.cos(theta) * dX[i]) ** 2
+                + np.sin(2 * theta) * dX[i] * dY[i]
+                + (np.sin(theta) * dY[i]) ** 2
+            )
+            * sea_level
+            / (Rx ** 3)
+        ) * sea_level
+        sea_level_prime_y = (
+            (
+                (np.sin(theta) * dX[i]) ** 2
+                - np.sin(2 * theta) * dX[i] * dY[i]
+                + (np.cos(theta) * dY[i]) ** 2
+            )
+            * sea_level
+            / (Ry ** 3)
+        ) * sea_level
+        grad_u[i, 0] = hprime_x * sea_level + h * sea_level_prime_x
+        grad_u[i, 1] = hprime_y * sea_level + h * sea_level_prime_y
+        grad_v[i, 0] = gprime_x * sea_level + g * sea_level_prime_x
+        grad_v[i, 1] = gprime_y * sea_level + g * sea_level_prime_y
+
+    return grad_u, grad_v
+
+
+def compute_gradL1(u_v_evaluated, u_v_measured, grad_u, grad_v):
+    """Compute the gradient of L1 with respect to Rx and Ry"""
+    gradL1 = np.zeros((2, 1))
+    n = len(u_v_evaluated)
+    gradL1_x = 2 * np.sum(
+        (u_v_evaluated[:, 0] - u_v_measured[:, 0]) * grad_u[:, 0]
+        + (u_v_evaluated[:, 1] - u_v_measured[:, 1]) * grad_v[:, 0]
+    )
+    gradL1_y = 2 * np.sum(
+        (u_v_evaluated[:, 0] - u_v_measured[:, 0]) * grad_u[:, 1]
+        + (u_v_evaluated[:, 1] - u_v_measured[:, 1]) * grad_v[:, 1]
+    )
+    gradL1[0] = gradL1_x
+    gradL1[1] = gradL1_y
+
+    return gradL1
