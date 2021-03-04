@@ -23,6 +23,7 @@ import matplotlib.pyplot as plt
 
 from matplotlib.patches import Ellipse
 from matplotlib.colors import Normalize
+from matplotlib.animation import FuncAnimation
 
 from classes import StreamLine, Eddy
 
@@ -42,7 +43,9 @@ class StreamPlot:
 
     def __init__(self):
         projection = cartopy.crs.PlateCarree()
-        self.fig, self.ax = plt.subplots(1, 1, subplot_kw={"projection": projection})
+        self.fig, self.ax = plt.subplots(
+            1, 1, subplot_kw={"projection": projection}
+        )
 
         gl = self.ax.gridlines(crs=projection, draw_labels=True)
         gl.xlabels_top, gl.ylabels_right = (False, False)
@@ -87,7 +90,10 @@ class StreamPlot:
         for k in range(nb_traj):
             traj = trajectories[k].coord_list
             self.ax.plot(
-                traj[:, 0], traj[:, 1], line_style, transform=cartopy.crs.Geodetic()
+                traj[:, 0],
+                traj[:, 1],
+                line_style,
+                transform=cartopy.crs.Geodetic(),
             )
 
     def plot_eddies(self, eddies, plot_traj=True, line_style="-"):
@@ -110,18 +116,23 @@ class StreamPlot:
         centers = np.array([eddies[k].center for k in range(n)])
         if len(eddies) > 0:
             self.ax.plot(
-                centers[:, 0], centers[:, 1], "k+", transform=cartopy.crs.Geodetic()
+                centers[:, 0],
+                centers[:, 1],
+                "k+",
+                transform=cartopy.crs.Geodetic(),
             )
 
         # Plot trajectories
         if plot_traj:
             for k in range(n):
-                self.plot_trajectories(eddies[k].sl_list, line_style=line_style)
+                self.plot_trajectories(
+                    eddies[k].sl_list, line_style=line_style
+                )
 
         # Plot ellipses
         # The angle of the ellipse is computed with 'vect_x - vect_y*1j' because
         # of y-axis inversion for plotting ellispses.
-        resize_coeff = 3
+        # resize_coeff = 3
         axes_len = np.array([eddies[k].axis_len for k in range(n)])
         axes_dir = np.array([eddies[k].axis_dir for k in range(n)])
         """
@@ -135,7 +146,10 @@ class StreamPlot:
         """
         angles = (
             np.array(
-                [np.angle(axes_dir[k, 0, 0] + axes_dir[k, 1, 0] * 1j) for k in range(n)]
+                [
+                    np.angle(axes_dir[k, 0, 0] + axes_dir[k, 1, 0] * 1j)
+                    for k in range(n)
+                ]
             )
             / (2 * np.pi)
             * 360
@@ -225,10 +239,12 @@ class StreamPlot:
         eddies_traj = {}
         for day in eddies_path.keys():
             for eddy_id in eddies_path[day].keys():
-                if not eddy_id in eddies_traj:
+                if eddy_id not in eddies_traj:
                     eddies_traj[eddy_id] = [eddies_path[day][eddy_id].center]
                 else:
-                    eddies_traj[eddy_id].append(eddies_path[day][eddy_id].center)
+                    eddies_traj[eddy_id].append(
+                        eddies_path[day][eddy_id].center
+                    )
 
         for eddy_id in eddies_traj.keys():
             xy = np.array(eddies_traj[eddy_id])
@@ -236,12 +252,123 @@ class StreamPlot:
 
     def plot(self, X, Y, marker="+", color=None):
         """ Wrapper of the basic 'plot' function of matplotlib.pyplot """
-        if color != None:
+        if color is not None:
             self.ax.plot(
-                X, Y, marker=marker, color=color, transform=cartopy.crs.Geodetic()
+                X,
+                Y,
+                marker=marker,
+                color=color,
+                transform=cartopy.crs.Geodetic(),
             )
         else:
             self.ax.plot(X, Y, marker=marker, transform=cartopy.crs.Geodetic())
+
+    def show(self):
+        plt.show()
+
+
+class Animation:
+    """ Matplotlib animation to visualize eddies movements."""
+
+    def __init__(self, eddies, inter=1000, tmin=None, tmax=None, t_vanish=0):
+
+        self.eddies = eddies
+        if tmin is None:
+            self.tmin = list(eddies.keys())[0]
+        else:
+            self.tmin = tmin
+        if tmax is None:
+            self.tmax = list(eddies.keys())[-1]
+        else:
+            self.tmax = tmax
+        self.t_vanish = t_vanish
+
+        self.fig, self.ax = plt.subplots(
+            1, 1, subplot_kw={"projection": cartopy.crs.PlateCarree()}
+        )
+        self.map = self.plot(0)
+        self.animation = FuncAnimation(
+            self.fig,
+            self.update,
+            self.tmax - self.tmin + 1,
+            interval=inter,
+            repeat=False,
+        )
+
+    def update(self, frame_number):
+
+        self.map = self.ax.clear()
+        self.map = plt.title(
+            "Prediction for date = %s" % (frame_number + self.tmin)
+        )
+        self.map = plt.xlim(50, 64)
+        self.map = plt.ylim(13, 23)
+        self.map = self.plot(frame_number)
+
+    def plot(self, frame_number):
+
+        gl = self.ax.gridlines(crs=cartopy.crs.PlateCarree(), draw_labels=True)
+        gl.xlabels_top, gl.ylabels_right = (False, False)
+        gl.xformatter = cartopy.mpl.gridliner.LONGITUDE_FORMATTER
+        gl.yformatter = cartopy.mpl.gridliner.LATITUDE_FORMATTER
+        self.ax.coastlines()
+
+        eddies = self.eddies[self.tmin + frame_number]
+        n = len(eddies)
+
+        # Plot centers
+        centers = np.array([eddies[k].center for k in range(n)])
+        if len(eddies) > 0:
+            self.ax.plot(
+                centers[:, 0],
+                centers[:, 1],
+                "k+",
+                transform=cartopy.crs.Geodetic(),
+            )
+
+        # Plot ellipses
+        resize_coeff = 3
+        axes_len = np.array([eddies[k].axis_len for k in range(n)])
+        axes_dir = np.array([eddies[k].axis_dir for k in range(n)])
+        angles = (
+            np.array(
+                [
+                    np.angle(axes_dir[k, 0, 0] - axes_dir[k, 0, 1] * 1j)
+                    for k in range(n)
+                ]
+            )
+            / (2 * np.pi)
+            * 360
+        )
+        for k in range(n):
+            ellipse = Ellipse(
+                centers[k, :],
+                axes_len[k, 0] * resize_coeff,
+                axes_len[k, 1] * resize_coeff,
+                angle=angles[k],
+                color="red",
+                alpha=1,
+                fill=False,
+                linewidth=2,
+            )
+            self.ax.add_patch(ellipse)
+
+            # Plot axis
+            self.ax.arrow(
+                centers[k, 0],
+                centers[k, 1],
+                axes_dir[k, 0, 0] * axes_len[k, 0] * 1.5,
+                -axes_dir[k, 0, 1] * axes_len[k, 0] * 1.5,
+            )
+
+            self.ax.arrow(
+                centers[k, 0],
+                centers[k, 1],
+                axes_dir[k, 1, 0] * axes_len[k, 1] * 1.5,
+                -axes_dir[k, 1, 1] * axes_len[k, 1] * 1.5,
+            )
+
+        return self.ax
 
     def show(self):
         plt.show()

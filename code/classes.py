@@ -15,8 +15,10 @@ __email__ = [
 ]
 
 import numpy as np
+from sklearn.neighbors import KDTree
 
-from AnDA_codes.AnDA_analog_forecasting import AnDA_analog_forecasting
+from metrics import eddies_jaccard_index
+from AnDA.AnDA_analog_forecasting import AnDA_analog_forecasting
 
 from tools import (
     grad_desc,
@@ -30,8 +32,9 @@ from tools import (
     convert_from_meter_to_degree,
 )
 from constants import EQUATORIAL_EARTH_RADIUS
-import netCDF4 as nc
-import scipy.interpolate as sp_interp
+
+# import netCDF4 as nc
+# import scipy.interpolate as sp_interp
 
 
 class StreamLine:
@@ -253,8 +256,12 @@ class Eddy:
         line length.
 
         """
-        sl_center = np.array([self.sl_list[k].mean_pos for k in range(self.nb_sl)])
-        sl_nb_pts = np.array([self.sl_list[k].nb_points for k in range(self.nb_sl)])
+        sl_center = np.array(
+            [self.sl_list[k].mean_pos for k in range(self.nb_sl)]
+        )
+        sl_nb_pts = np.array(
+            [self.sl_list[k].nb_points for k in range(self.nb_sl)]
+        )
         sl_wcenter = [sl_center[k] * sl_nb_pts[k] for k in range(self.nb_sl)]
         self.center = np.sum(sl_wcenter, axis=0) / np.sum(sl_nb_pts)
 
@@ -283,12 +290,16 @@ class Eddy:
         R = EQUATORIAL_EARTH_RADIUS
 
         # Compute the covariance matrixe for finding the axis direction
-        nb_coord = np.sum([self.sl_list[k].nb_points for k in range(self.nb_sl)])
+        nb_coord = np.sum(
+            [self.sl_list[k].nb_points for k in range(self.nb_sl)]
+        )
         merged_coord_list = np.zeros((nb_coord, 2))
         index = 0
         for sl_id in range(self.nb_sl):
             sl = self.sl_list[sl_id]
-            merged_coord_list[index : index + sl.nb_points, :] = np.array(sl.coord_list)
+            merged_coord_list[index : index + sl.nb_points, :] = np.array(
+                sl.coord_list
+            )
             index += sl.nb_points
         merged_coord_list[:, 0] -= self.center[0]
         merged_coord_list[:, 1] -= self.center[1]
@@ -337,8 +348,12 @@ class Eddy:
         point_ry = np.array([0, self.axis_len[1]])
         point_rx = np.dot(rotation_inv, point_rx.T).T
         point_ry = np.dot(rotation_inv, point_ry.T).T
-        point_rx_meter = convert_from_degree_to_meter(point_rx, self.center[1], R)
-        point_ry_meter = convert_from_degree_to_meter(point_ry, self.center[1], R)
+        point_rx_meter = convert_from_degree_to_meter(
+            point_rx, self.center[1], R
+        )
+        point_ry_meter = convert_from_degree_to_meter(
+            point_ry, self.center[1], R
+        )
         axis_len_meter[0] = np.linalg.norm(point_rx_meter)
         axis_len_meter[1] = np.linalg.norm(point_ry_meter)
 
@@ -377,16 +392,22 @@ class Eddy:
             grad_u, grad_v = compute_grad_u_v(
                 aligned_points, angle, self.center, axis_len_meter, h0
             )
-            gradL1 = compute_gradL1(u_v_evaluated, u_v_measured, grad_u, grad_v)
+            gradL1 = compute_gradL1(
+                u_v_evaluated, u_v_measured, grad_u, grad_v
+            )
 
             axis_len_meter[0] -= step_sizex * gradL1[0]
             axis_len_meter[1] -= step_sizey * gradL1[1]
             # Updating Rx and Ry in degreee to recompute h0
             point_rx_meter = (
-                point_rx_meter * axis_len_meter[0] / np.linalg.norm(point_rx_meter)
+                point_rx_meter
+                * axis_len_meter[0]
+                / np.linalg.norm(point_rx_meter)
             )
             point_ry_meter = (
-                point_ry_meter * axis_len_meter[1] / np.linalg.norm(point_ry_meter)
+                point_ry_meter
+                * axis_len_meter[1]
+                / np.linalg.norm(point_ry_meter)
             )
             point_rx_degree = convert_from_meter_to_degree(
                 point_rx_meter, self.center[1], R
@@ -448,10 +469,6 @@ class Catalog:
         self.analogs = analogs
         self.successors = successors
 
-    def adjust(self, multi):
-        self.analogs = self.analogs * multi
-        self.successors = self.successors * multi
-
 
 class Observation:
     """Class used to represent observation of eddies and give time scale.
@@ -461,21 +478,21 @@ class Observation:
             (axis 0). np.nan if no observed parameter.
         time (array like) : times corresponding to observation and desired
             prediction.
+        R (np.array(6,6)) : observation noise covariance matrix.
 
     Attributes:
         values (array_like) : 6 parameters (axis 1) of different observed eddies
             (axis 0). np.nan if no observed parameter.
         time (array like) : times corresponding to observation and desired
             prediction.
+        R (np.array(6,6)) : observation noise covariance matrix.
 
     """
 
-    def __init__(self, values, time):
+    def __init__(self, values, time, R=np.ones((6, 6)) / 36):
         self.values = values
         self.time = time
-
-    def adjust(self, multi):
-        self.values = self.values * multi
+        self.R = R
 
 
 class ForecastingMethod:
@@ -483,28 +500,41 @@ class ForecastingMethod:
 
     Args:
         k (int) : number of analogs to use during the forecast.
-        neighborhood (array like(6,6)) : a_ij = 1 or 0. 1 if the ith parameter
-            will be used to predict the jth parameter, 0 otherwise
         catalog(Catalog) : a catalog of analogs and successors
         regression(String) : chosen regression ('locally_constant', 'increment',
             'local_linear')
     Attributes:
         k (int) : number of analogs to use during the forecast.
-        neighborhood (array like(6,6)) : a_ij = 1 or 0. 1 if the ith parameter
-            will be used to predict the jth parameter, 0 otherwise
         catalog(Catalog) : a catalog of analogs and successors
         regression(String) : chosen regression ('locally_constant', 'increment',
             'local_linear')
-        sampling(String) : chosen sampler ('gaussian')
 
     """
 
-    def __init__(self, catalog, k=50, regression="increment"):
+    def __init__(self, catalog, k, search, regression="local_linear"):
         self.k = min(k, np.shape(catalog.analogs)[0] - 1)
-        self.neighborhood = np.ones((6, 6))
         self.catalog = catalog
         self.regression = regression
-        self.sampling = "gaussian"
+        self.search = search
+
+    def search_neighbors(self, x):
+        kdt = KDTree(
+            self.catalog.analogs[:, [0, 1]], leaf_size=50, metric="euclidean"
+        )
+        dist_knn, index_knn = kdt.query(x[:, [0, 1]], self.k)
+        if self.search == "complet":
+            for i in range(x.shape[0]):
+                e1 = Eddy([], None, param=x[i, :])
+                for j in range(self.k):
+                    e2 = Eddy(
+                        [],
+                        None,
+                        param=self.catalog.analogs[index_knn[i, j], :],
+                    )
+                    dist_knn[i, j] = dist_knn[i, j] * (
+                        1 - eddies_jaccard_index(e1, e2, 10)
+                    )
+        return dist_knn, index_knn
 
 
 class FilteringMethod:
@@ -526,7 +556,7 @@ class FilteringMethod:
 
     """
 
-    def __init__(self, R, forecasting_method, method="AnEnKS", N=50):
+    def __init__(self, R, N, forecasting_method, method="AnEnKS"):
         self.method = method
         self.N = N
         self.xb = None
@@ -537,9 +567,6 @@ class FilteringMethod:
 
     def set_first_eddy(self, xb):
         self.xb = xb
-
-    def adjust(self, multi):
-        self.R = self.R * multi
 
     def m(self, x):
         return AnDA_analog_forecasting(x, self.AF)
