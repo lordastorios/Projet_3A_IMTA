@@ -385,7 +385,7 @@ def get_traj_with_numpy(
     return (sl_list, date)
 
 
-def find_eddies(stream_line_list, date):
+def find_eddies(stream_line_list, date=0):
     """Classify stream lines into eddies.
 
     All the stream lines with a winding angle lower than 2 pi are discarded. If
@@ -400,7 +400,7 @@ def find_eddies(stream_line_list, date):
     Args:
         stream_line_list (list of classes.StreamLine) : The list of trajectories
             to be classified into eddies.
-        date : date at which the trajectories are simulated
+        date (int, default=0) : date at which the trajectories are simulated.
 
     Returns:
         eddies_list (list of classes.Eddy) : The list of eddies.

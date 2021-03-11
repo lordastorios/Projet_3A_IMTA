@@ -111,7 +111,7 @@ class StreamLine:
         """
 
         coord = self.coord_list[:, 0] + 1j * self.coord_list[:, 1]
-        coord += coord.real * (np.cos(self.mean_pos[1] * np.pi / 180) - 1)
+        coord += coord.real * np.cos(self.mean_pos[1] * np.pi / 180)
         vectors = coord[1:] - coord[:-1]
 
         # Remove the null vectors
@@ -200,6 +200,7 @@ class Eddy:
 
     Args:
         sl_list (list of StreamLine) : List of streamline representing the eddy.
+        date (int, default=0) : date at which the trajectories are simulated.
         param (list, default=[]) : Parameters of the eddy when it is not
             initialized from a list of streamlines. It should contain 6 values.
             The 2 first are the longitude and the latitude of the eddy center.
@@ -224,7 +225,7 @@ class Eddy:
 
     """
 
-    def __init__(self, sl_list, date, param=[]):
+    def __init__(self, sl_list, date=0, param=[]):
         if len(param) == 0:
             self.date = date
             self.sl_list = list(sl_list)
