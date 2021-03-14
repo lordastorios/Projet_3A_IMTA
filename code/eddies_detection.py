@@ -25,6 +25,7 @@ import scipy.interpolate as sp_interp
 from parcels import FieldSet, ParticleSet, ScipyParticle, ErrorCode
 from parcels import AdvectionAnalytical, AdvectionRK4
 from datetime import timedelta as delta
+from tqdm import trange
 
 from classes import StreamLine, Eddy
 from constants import EQUATORIAL_EARTH_RADIUS, MIN_STREAMLINE_IN_EDDIES
@@ -222,12 +223,7 @@ def get_traj_with_scipy(
 
     # Integrate each positions
     stream_line_list = []
-    progression = 0
-    print("Integration: ", end="", sep="")
-    for sl_id in range(nb_stream_line):
-        if int(sl_id / nb_stream_line * 100) - progression >= 5:
-            progression += 5
-            print(progression, "% ", end="", sep="")
+    for sl_id in trange(nb_stream_line,desc="Integration"):
 
         coord_list = [np.array(init_pos[sl_id])]
         dt_list = []
@@ -257,7 +253,6 @@ def get_traj_with_scipy(
 
         dt_list = np.array(dt_list)
         stream_line_list.append(StreamLine(coord_list, dt_list))
-    print()
 
     return stream_line_list
 
@@ -367,12 +362,7 @@ def get_traj_with_numpy(
 
     rk_4_vectorized = np.vectorize(rk_4, signature="(n)->(n)")
 
-    progression = 0
-    print("Integration: ", end="", sep="")
-    for step in range(nb_step):
-        if int(step / nb_step * 100) - progression >= 5:
-            progression += 5
-            print(progression, "% ", end="", sep="")
+    for step in trange(nb_step,desc="Integration"):
         sl_array[step + 1, :, :] = rk_4_vectorized(sl_array[step, :, :])
     print()
 
