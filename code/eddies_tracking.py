@@ -23,8 +23,8 @@ def eddies_tracker(initial_date, list_days, metric_name='Jaccard',nb_prev_day=5,
     Args:
         initial_date (int) : Date of the first day in list_days.
         list_days (list of list of classes.Eddy) : The first index is a date
-            relative to the parameter 'date'. The elements are the list of
-            detected eddies at the corresping data.
+            relative to the parameter 'initial_date'. The elements are the list
+            of detected eddies at the corresponding data.
         metric_name (str, default='Jaccard') : The metric to use for matching
             eddies position on consecutive days.
         nb_prev_day (int, default=2): The maximum number of days to look
@@ -33,7 +33,7 @@ def eddies_tracker(initial_date, list_days, metric_name='Jaccard',nb_prev_day=5,
             detected for several consecutive days, an eddy can be matched with a
             previous position several days before. The default value has been
             choosen with the assumption that an eddy that last several days will
-            not be not detected for more that one day.
+            not be undetected for more that one day.
         min_detection (int, default=5) : Minimum number of observation of an
             eddy. Eddies with too view observations are discarded 
 
