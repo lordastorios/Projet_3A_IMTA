@@ -382,7 +382,7 @@ def get_traj_with_numpy(
             StreamLine(sl_array[np.isfinite(sl_array[:, k, 0]), k, :], dt)
         )  # ,cut_lines=False))
 
-    return (sl_list, date)
+    return sl_list
 
 
 def find_eddies(stream_line_list, date=0):
