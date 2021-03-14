@@ -130,26 +130,28 @@ class StreamLine:
             self.winding_angle = 0
             self.angular_velocities = 0
         else:
-            # Find the shortest sub streamline with winding angle >= 2 pi (only
-            # if it exist).
+            # Find the shortest sub streamline with the smallest ratio
+            # dist(start,end)/sub_line_len. This ratio will be close to 1 for
+            # straight lines and close to 0 for closed loop.
+
             if cut_lines:
-                cumsum_norms = np.cumsum(norms)
+                cumsum_norms = np.concatenate((np.array([0]),np.cumsum(norms)))
 
                 min_ratio = 1
 
-                min_end_id = 0
-                min_start_id = self.nb_points - 2
+                min_end_id   = self.nb_points - 1
+                min_start_id = 0
 
-                for start_id in range(self.nb_points - 1):
+                for start_id in range(self.nb_points):
                     start_norm = cumsum_norms[start_id]
                     start_pts = coord[start_id]
-                    for end_id in range(start_id, self.nb_points - 1):
+                    for end_id in range(start_id+1, self.nb_points):
                         curr_len = cumsum_norms[end_id] - start_norm
                         start_end_dist = abs(coord[end_id] - start_pts)
                         ratio = start_end_dist / curr_len
                         if ratio <= min_ratio:
-                            min_ratio = ratio
-                            min_end_id = end_id
+                            min_ratio    = ratio
+                            min_end_id   = end_id
                             min_start_id = start_id
 
                 # Recompute the first attributs after taking the sub streamline
