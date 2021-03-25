@@ -96,7 +96,7 @@ class StreamPlot:
                 transform=cartopy.crs.Geodetic(),
             )
 
-    def plot_eddies(self, eddies, plot_traj=True, line_style="-"):
+    def plot_eddies(self, eddies, plot_traj=True, line_style="-", ellipse_color='k'):
         """Plots eddies from a .nc particles trajectories file.
 
         Plot the center of the eddies and an ellipse representing each eddy.
@@ -118,7 +118,7 @@ class StreamPlot:
             self.ax.plot(
                 centers[:, 0],
                 centers[:, 1],
-                "k+",
+                ellipse_color+'+',
                 transform=cartopy.crs.Geodetic(),
             )
 
@@ -135,15 +135,7 @@ class StreamPlot:
         # resize_coeff = 3
         axes_len = np.array([eddies[k].axis_len for k in range(n)])
         axes_dir = np.array([eddies[k].axis_dir for k in range(n)])
-        """
-        angles = (
-            np.array(
-                [np.angle(axes_dir[k, 0, 0] - axes_dir[k, 0, 1] * 1j) for k in range(n)]
-            )
-            / (2 * np.pi)
-            * 360
-        )
-        """
+
         angles = (
             np.array(
                 [
@@ -157,29 +149,29 @@ class StreamPlot:
         for k in range(n):
             ellipse = Ellipse(
                 centers[k, :],
-                axes_len[k, 0] * 2,
-                axes_len[k, 1] * 2,
+                axes_len[k, 0] * 3,
+                axes_len[k, 1] * 3,
                 angle=angles[k],
-                color="black",
+                color=ellipse_color,
                 alpha=1,
                 fill=False,
-                linewidth=2,
+                linewidth=2
             )
             self.ax.add_patch(ellipse)
 
-            # Plot axis
+            # Plot ellipse axis
             self.ax.arrow(
                 centers[k, 0],
                 centers[k, 1],
-                axes_dir[k, 0, 0] * axes_len[k, 0] * 1,
-                axes_dir[k, 1, 0] * axes_len[k, 0] * 1,
+                axes_dir[k, 0, 0] * axes_len[k, 0] * 1.5,
+                axes_dir[k, 1, 0] * axes_len[k, 0] * 1.5,
             )
 
             self.ax.arrow(
                 centers[k, 0],
                 centers[k, 1],
-                axes_dir[k, 0, 1] * axes_len[k, 1] * 1,
-                axes_dir[k, 1, 1] * axes_len[k, 1] * 1,
+                axes_dir[k, 0, 1] * axes_len[k, 1] * 1.5,
+                axes_dir[k, 1, 1] * axes_len[k, 1] * 1.5,
             )
 
     def plot_catalogue(self, eddies_path):
