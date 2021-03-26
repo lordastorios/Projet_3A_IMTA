@@ -364,7 +364,6 @@ def get_traj_with_numpy(
 
     for step in trange(nb_step,desc="Integration"):
         sl_array[step + 1, :, :] = rk_4_vectorized(sl_array[step, :, :])
-    print()
 
     sl_list = []
     for k in range(nb_sl):
